@@ -316,13 +316,13 @@ def main() -> int:
         str(python), "-m", "pr_agent.cli",
         f"--pr_url={pr_url}",
         args.command,
-            f"--config.model={model}",
-            "--config.publish_output=false",
-            # verbosity=2 is required so PR-Agent logs the review YAML
-            # to stderr (our capture channel). Without it, the review
-            # is generated but never output when publish_output=false.
-            "--config.verbosity_level=2",
-            f"--config.fallback_models=[\"{model}\"]",
+        f"--config.model={model}",
+        "--config.publish_output=false",
+        # verbosity=2 is required so PR-Agent logs the review YAML
+        # to stderr (our capture channel). Without it, the review
+        # is generated but never output when publish_output=false.
+        "--config.verbosity_level=2",
+        f"--config.fallback_models=[\"{model}\"]",
         "--pr_reviewer.require_score_review=true",
         "--pr_reviewer.require_tests_review=true",
         "--pr_reviewer.require_security_review=true",
