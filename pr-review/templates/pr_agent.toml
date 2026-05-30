@@ -8,7 +8,9 @@
 
 [config]
 publish_output = false
-verbosity_level = 0
+# verbosity_level is overridden to 2 at runtime by run_review.py
+# so that PR-Agent logs the review YAML to stderr for capture.
+verbosity_level = 2
 git_provider = "github"
 
 [pr_reviewer]
