@@ -51,11 +51,72 @@ def _get_installed_version() -> str | None:
         return None
 
 
+MIN_PYTHON = (3, 12)
+
+
+def _find_python312() -> str | None:
+    """Find a Python >= 3.12 binary on the system.
+
+    Checks pyenv versions, then common paths like python3.12.
+    Returns the path string or None.
+    """
+    import shutil
+
+    # Try pyenv versions directory first (bypasses shim issues)
+    pyenv_root = Path.home() / ".pyenv" / "versions"
+    if pyenv_root.is_dir():
+        for version_dir in sorted(pyenv_root.iterdir(), reverse=True):
+            if not version_dir.name.startswith("3."):
+                continue
+            parts = version_dir.name.split(".")
+            try:
+                if (int(parts[0]), int(parts[1])) >= MIN_PYTHON:
+                    candidate = version_dir / "bin" / "python3"
+                    if candidate.exists():
+                        return str(candidate)
+            except (ValueError, IndexError):
+                continue
+
+    # Fallback: try explicit versioned binaries on PATH
+    for name in ("python3.12", "python3.13", "python3.14"):
+        path = shutil.which(name)
+        if path:
+            return path
+
+    return None
+
+
 def _create_venv() -> bool:
-    """Create the isolated venv. Returns True on success."""
+    """Create the isolated venv using Python >= 3.12.
+
+    PR-Agent >= 0.34 requires Python 3.12+. If the current interpreter
+    is older, we locate a 3.12+ binary and use subprocess to create
+    the venv instead of the venv module.
+    """
     try:
         VENV_DIR.parent.mkdir(parents=True, exist_ok=True)
-        venv.create(str(VENV_DIR), with_pip=True, clear=True)
+
+        if sys.version_info >= MIN_PYTHON:
+            venv.create(str(VENV_DIR), with_pip=True, clear=True)
+        else:
+            python312 = _find_python312()
+            if not python312:
+                print(
+                    f"error: pr-agent requires Python >= {'.'.join(map(str, MIN_PYTHON))} "
+                    f"but only {sys.version.split()[0]} is available. "
+                    "Install Python 3.12+ via pyenv or your package manager.",
+                    file=sys.stderr,
+                )
+                return False
+            print(f"Using {python312} for venv (current Python is {sys.version.split()[0]})", file=sys.stderr)
+            result = subprocess.run(
+                [python312, "-m", "venv", "--clear", str(VENV_DIR)],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode != 0:
+                print(f"error: venv creation failed: {result.stderr}", file=sys.stderr)
+                return False
+
         return _python_bin().exists()
     except Exception as exc:
         print(f"error: failed to create venv at {VENV_DIR}: {exc}", file=sys.stderr)

@@ -45,7 +45,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = SCRIPT_DIR.parent / "templates"
 VENV_DIR = Path.home() / ".local" / "share" / "opencode-harness" / "pr-agent-venv"
 
-DEFAULT_MODEL = "anthropic/claude-sonnet-4-20250514"
+DEFAULT_MODEL = "anthropic/claude-opus-4-6"
 SUPPORTED_COMMANDS = ("review", "improve", "describe", "ask")
 
 
@@ -62,6 +62,28 @@ def _resolve_model() -> str:
 
 
 SECRETS_PATH = Path.home() / ".pr_agent_secrets.toml"
+
+
+def _resolve_github_token() -> str | None:
+    """Try to get a GitHub token from gh CLI or secrets file."""
+    import shutil
+
+    # 1. Try gh CLI
+    if shutil.which("gh"):
+        try:
+            result = subprocess.run(
+                ["gh", "auth", "token"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pass
+
+    # 2. Try secrets file
+    secrets = _read_secrets_toml()
+    return secrets.get("github", {}).get("user_token")
+
 
 
 def _read_secrets_toml() -> dict[str, dict[str, str]]:
@@ -173,15 +195,10 @@ def _build_config(
 
     lines.append("")
 
-    # Secrets section
-    if provider == "openai":
-        lines.extend(["[openai]", f'key = "{key}"'])
-    elif provider == "anthropic":
-        lines.extend(["[anthropic]", f'KEY = "{key}"'])
-    elif provider == "groq":
-        lines.extend(["[groq]", f'key = "{key}"'])
-    elif provider == "deepseek":
-        lines.extend(["[deepseek]", f'key = "{key}"'])
+    # NOTE: LLM keys and GitHub token are passed as env vars
+    # (ANTHROPIC__KEY, GITHUB__USER_TOKEN, etc.) rather than in the
+    # config file, because PR-Agent's dynaconf reads secrets from
+    # env vars with double-underscore notation.
     lines.append("")
 
     # Reviewer config
@@ -354,10 +371,38 @@ def main() -> int:
             str(python), "-m", "pr_agent.cli",
             f"--pr_url={pr_url}",
             args.command,
+            # Inline config overrides (PR-Agent reads these as --section.key=value)
+            f"--config.model={model}",
+            "--config.publish_output=false",
+            "--config.verbosity_level=2",
+            f"--config.fallback_models=[\"{model}\"]",
+            "--pr_reviewer.require_score_review=true",
+            "--pr_reviewer.require_tests_review=true",
+            "--pr_reviewer.require_security_review=true",
+            "--pr_reviewer.require_estimate_effort_to_review=true",
+            "--pr_reviewer.num_max_findings=10",
         ]
 
+        if args.extra_instructions:
+            cmd.append(f"--pr_reviewer.extra_instructions={args.extra_instructions}")
+
         env = os.environ.copy()
-        env["CONFIG_PATH"] = config_path
+
+        # PR-Agent uses dynaconf which reads env vars as SECTION__KEY
+        provider, key = api_key_info
+        if provider == "anthropic":
+            env["ANTHROPIC__KEY"] = key
+        elif provider == "openai":
+            env["OPENAI__KEY"] = key
+        elif provider == "groq":
+            env["GROQ__KEY"] = key
+        elif provider == "deepseek":
+            env["DEEPSEEK__KEY"] = key
+
+        # GitHub token for PR access
+        github_token = os.environ.get("GITHUB_TOKEN") or _resolve_github_token()
+        if github_token:
+            env["GITHUB__USER_TOKEN"] = github_token
 
         print(
             f"Running: pr-agent {args.command} (model={model}, "

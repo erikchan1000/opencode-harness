@@ -144,7 +144,7 @@ class TestBuildConfig:
     """Tests for _build_config()."""
 
     def test_basic_config_structure(self):
-        """Should produce valid TOML-like config."""
+        """Should produce valid TOML-like config (secrets passed via env, not in file)."""
         config = run_review._build_config(
             model="anthropic/claude-sonnet-4-20250514",
             api_key_info=("anthropic", "sk-test"),
@@ -156,8 +156,8 @@ class TestBuildConfig:
         assert '[config]' in config
         assert 'model = "anthropic/claude-sonnet-4-20250514"' in config
         assert 'publish_output = false' in config
-        assert '[anthropic]' in config
-        assert 'KEY = "sk-test"' in config
+        # Secrets are passed as env vars, NOT written to config file
+        assert 'sk-test' not in config
 
     def test_local_mode_sets_local_provider(self):
         """Should set git_provider to local when --local."""
@@ -183,8 +183,8 @@ class TestBuildConfig:
         )
         assert "Focus on HIPAA compliance" in config
 
-    def test_openai_key_section(self):
-        """Should write [openai] section for OpenAI keys."""
+    def test_no_secrets_in_config_file(self):
+        """Secrets should NOT appear in the config file (passed via env vars)."""
         config = run_review._build_config(
             model="gpt-4o",
             api_key_info=("openai", "sk-openai-test"),
@@ -193,8 +193,8 @@ class TestBuildConfig:
             local_mode=False,
             repo_config=None,
         )
-        assert '[openai]' in config
-        assert 'key = "sk-openai-test"' in config
+        assert "sk-openai-test" not in config
+        assert "[openai]" not in config
 
 
 class TestMainValidation:
