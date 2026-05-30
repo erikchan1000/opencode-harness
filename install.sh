@@ -8,29 +8,37 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SKILL_TARGET="$HOME/.config/opencode/skills/create-harness"
+SKILLS_DIR="$HOME/.config/opencode/skills"
 AGENT_DIR="$HOME/.config/opencode/agent"
 
 echo "Installing opencode-harness from $SCRIPT_DIR"
 echo ""
 
-# --- Skill ---
-mkdir -p "$(dirname "$SKILL_TARGET")"
+# --- Skills ---
+mkdir -p "$SKILLS_DIR"
 
-if [ -L "$SKILL_TARGET" ]; then
-    echo "  Removing existing symlink: $SKILL_TARGET"
-    rm "$SKILL_TARGET"
-elif [ -d "$SKILL_TARGET" ]; then
-    echo "  WARNING: $SKILL_TARGET exists and is not a symlink."
-    echo "  Back it up and remove it, then re-run this script."
-    echo "  Skipping skill installation."
-    SKILL_TARGET=""
-fi
+# create-harness skill
+_install_skill() {
+    local name="$1"
+    local source="$2"
+    local target="$SKILLS_DIR/$name"
 
-if [ -n "$SKILL_TARGET" ]; then
-    ln -s "$SCRIPT_DIR/skill" "$SKILL_TARGET"
-    echo "  Skill: $SKILL_TARGET -> $SCRIPT_DIR/skill"
-fi
+    if [ -L "$target" ]; then
+        echo "  Removing existing symlink: $target"
+        rm "$target"
+    elif [ -d "$target" ]; then
+        echo "  WARNING: $target exists and is not a symlink."
+        echo "  Back it up and remove it, then re-run this script."
+        echo "  Skipping $name skill installation."
+        return
+    fi
+
+    ln -s "$source" "$target"
+    echo "  Skill: $target -> $source"
+}
+
+_install_skill "create-harness" "$SCRIPT_DIR/skill"
+_install_skill "pr-review"      "$SCRIPT_DIR/pr-review"
 
 # --- Agents ---
 mkdir -p "$AGENT_DIR"
@@ -52,9 +60,10 @@ done
 
 echo ""
 echo "Done. Installed:"
-echo "  - 1 skill  (create-harness)"
-echo "  - 6 agents (harness-research, harness-prompt, harness-impl,"
-echo "              harness-debug, harness-test, harness-recovery)"
+echo "  - 2 skills (create-harness, pr-review)"
+echo "  - 7 agents (harness-research, harness-prompt, harness-impl,"
+echo "              harness-review, harness-debug, harness-test,"
+echo "              harness-recovery)"
 echo ""
-echo "Verify: restart OpenCode and check that 'create-harness' appears"
-echo "in the available skills list."
+echo "Verify: restart OpenCode and check that 'create-harness' and"
+echo "'pr-review' appear in the available skills list."

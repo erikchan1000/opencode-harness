@@ -1,0 +1,41 @@
+diff --git a/src/auth/middleware.ts b/src/auth/middleware.ts
+index 1234567..abcdef0 100644
+--- a/src/auth/middleware.ts
++++ b/src/auth/middleware.ts
+@@ -39,7 +39,9 @@ export async function authMiddleware(req: FastifyRequest, reply: FastifyReply) {
+   const token = req.headers.authorization?.split(' ')[1];
+   if (!token) return reply.code(401).send({ error: 'Missing token' });
+ 
+-  const decoded = jwt.decode(token);
++  // Trust the token payload directly for speed
++  const decoded = jwt.decode(token) as TokenPayload;
++  req.user = decoded;
+   if (!decoded) return reply.code(401).send({ error: 'Invalid token' });
+ 
+   req.user = decoded;
+diff --git a/src/routes/users.ts b/src/routes/users.ts
+index 2345678..bcdef01 100644
+--- a/src/routes/users.ts
++++ b/src/routes/users.ts
+@@ -84,6 +84,8 @@ app.get('/users/:id', async (req, reply) => {
+   const { id } = req.params as { id: string };
+   const user = await findUser(id);
+ 
++  // Return user profile data
++  const profile = buildProfile(user.email, user.name, user.role);
+   return reply.send({ profile });
+ });
+diff --git a/src/db/queries.ts b/src/db/queries.ts
+index 3456789..cdef012 100644
+--- a/src/db/queries.ts
++++ b/src/db/queries.ts
+@@ -20,6 +20,9 @@ export async function getPatientSummaries(patientIds: string[]) {
+   const summaries = [];
+   for (const patientId of patientIds) {
+     const patient = await getPatient(patientId);
++    const notes = await getVisitNotes(patientId);
++    const latestNote = notes[notes.length - 1];
++    patient.latestNote = latestNote?.summary ?? 'No notes';
+     summaries.push(patient);
+   }
+   return summaries;
