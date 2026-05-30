@@ -72,7 +72,7 @@ The system handles the hard parts of multi-agent orchestration: context isolatio
 ## Repository structure
 
 ```
-opencode-harness/
+opencode-plan/
 ├── README.md
 ├── LICENSE
 ├── install.sh              # Symlink into ~/.config/opencode/
@@ -114,7 +114,7 @@ This creates symlinks from your OpenCode config to the repo, so updates are pick
 
 ```bash
 # Install the skill
-cp -r skill/ ~/.config/opencode/skills/create-harness/
+cp -r skill/ ~/.config/opencode/skills/create-plan/
 
 # Install the agent definitions
 cp agents/harness-*.md ~/.config/opencode/agent/
@@ -146,12 +146,12 @@ The orchestrator (parent agent) then runs the five-phase loop, spawning subagent
 You: "Find and fix correctness bugs in src/auth/"
 
 OpenCode (orchestrator):
-  Phase 0 → writes harness/objective.md
+  Phase 0 → writes plan/objective.md
   Phase 1 → spawns 2 research agents scoped to src/auth/
-  Phase 2 → runs build_pipelines.py → harness/pipelines.md
+  Phase 2 → runs build_pipelines.py → plan/pipelines.md
   Phase 3 → Wave 1: generates prompts, runs impl+test pipelines in parallel
           → Wave 2: JIT prompts with Wave 1 context, runs remaining pipelines
-  Phase 4 → writes harness/report.md, surfaces summary
+  Phase 4 → writes plan/report.md, surfaces summary
 ```
 
 ### The DAG builder
@@ -160,8 +160,8 @@ The `build_pipelines.py` script is the deterministic planner:
 
 ```bash
 python skill/scripts/build_pipelines.py \
-  --findings harness/findings.md \
-  --output   harness/pipelines.md \
+  --findings plan/findings.md \
+  --output   plan/pipelines.md \
   --title    "Auth module bugs"
 ```
 
@@ -169,10 +169,10 @@ It reads the findings table, builds a dependency graph from `Depends on` and `To
 
 ## Runtime artifacts
 
-When a harness runs, it creates a `harness/` directory in the target repo:
+When a harness runs, it creates a `plan/` directory in the target repo:
 
 ```
-harness/
+plan/
 ├── objective.md            # Phase 0 scope
 ├── findings.md             # Phase 1 aggregated findings table
 ├── pipelines.md            # Phase 2 wave plan
@@ -190,7 +190,7 @@ harness/
 Recommended `.gitignore` addition:
 
 ```
-harness/scratch/
+plan/scratch/
 ```
 
 ## Requirements

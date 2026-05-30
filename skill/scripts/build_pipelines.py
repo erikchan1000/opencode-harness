@@ -5,7 +5,7 @@ Reads a findings.md table and produces a pipelines.md wave plan.
 Replaces the LLM-based planner with a reliable, deterministic script.
 
 Usage:
-    python build_pipelines.py --findings harness/findings.md --output harness/pipelines.md
+    python build_pipelines.py --findings plan/findings.md --output plan/pipelines.md
 
 Exit codes:
     0 — success

@@ -106,8 +106,8 @@ Decide and write down:
 4. **Failure budget**: how many recovery loops per finding before
    escalating to the human (default: 2 — one warm retry, one cold).
 
-Write this to `harness/objective.md` using the template at
-`${CLAUDE_SKILL_DIR}/templates/objective.md`. The `harness/` directory
+Write this to `plan/objective.md` using the template at
+`${CLAUDE_SKILL_DIR}/templates/objective.md`. The `plan/` directory
 lives at the repo root, gitignored unless the team wants it tracked.
 
 ### Phase 1 — Research (parallel)
@@ -123,8 +123,8 @@ Task(subagent_type: "harness-research",
      prompt: "Scope: <directory>
               Focus: <what to look for>
               Finding template: ${CLAUDE_SKILL_DIR}/templates/finding.md
-              Output path: harness/findings/research-<scope>.md
-              Scratchpad dir: harness/scratch/")
+              Output path: plan/findings/research-<scope>.md
+              Scratchpad dir: plan/scratch/")
 ```
 
 Findings must be sorted by severity, structured per the template, and
@@ -137,7 +137,7 @@ Each finding **must** declare:
 - `Touches files`: paths the implementation diff is expected to edit.
   Used by the planner to detect file-conflict collisions.
 
-Aggregate outputs into a single `harness/findings.md` table:
+Aggregate outputs into a single `plan/findings.md` table:
 
 ```markdown
 | ID  | Severity | Area      | Title                      | File:Line                   | Depends on | Touches files                               |
@@ -148,12 +148,12 @@ Aggregate outputs into a single `harness/findings.md` table:
 
 ### Phase 2 — Plan (deterministic)
 
-Run the DAG builder script to produce `harness/pipelines.md`:
+Run the DAG builder script to produce `plan/pipelines.md`:
 
 ```bash
 python "${CLAUDE_SKILL_DIR}/scripts/build_pipelines.py" \
-  --findings harness/findings.md \
-  --output   harness/pipelines.md
+  --findings plan/findings.md \
+  --output   plan/pipelines.md
 ```
 
 The script:
@@ -186,14 +186,14 @@ For each wave:
       - Invoke Task(subagent_type: "harness-prompt",
                     prompt: "<finding details from findings.md>
                              Template: ${CLAUDE_SKILL_DIR}/templates/impl-prompt.md
-                             Output: harness/prompts/F0N-<slug>.md
+                             Output: plan/prompts/F0N-<slug>.md
                              Prior wave results: <summary of completed findings if any>")
       - Save task_id (not needed for prompt, but consistent)
 
   Step 3b — Finding pipelines (parallel):
     For each F0N in this wave (PARALLEL):
       - [ ] Implementation: invoke Task(subagent_type: "harness-impl",
-                                        prompt: "Prompt: harness/prompts/F0N-<slug>.md")
+                                        prompt: "Prompt: plan/prompts/F0N-<slug>.md")
             Save task_id as impl_task_id_F0N.
       - [ ] On impl failure — WARM RETRY:
               Resume via Task(subagent_type: "harness-impl",
@@ -205,7 +205,7 @@ For each wave:
               Invoke Task(subagent_type: "harness-recovery",
                           prompt: "<original prompt path + failed transcript>")
               Then invoke a FRESH Task(subagent_type: "harness-impl",
-                                       prompt: "harness/prompts/F0N.recovery-1.md")
+                                       prompt: "plan/prompts/F0N.recovery-1.md")
       - [ ] Debug: invoke Task(subagent_type: "harness-debug")
               only if the impl output shows a regression or unexpected behaviour.
               Route the debug note back to impl if a re-fix is needed.
@@ -236,7 +236,7 @@ and proceed to the next wave with its dependents also deferred, or
 
 ### Phase 4 — Wrap
 
-- Aggregate completion logs from each finding into `harness/report.md`.
+- Aggregate completion logs from each finding into `plan/report.md`.
 - Update repo conventions (CHANGELOG, ADRs, etc.) per the repo's
   `AGENTS.md` or equivalent.
 - Surface the report to the user with a short summary and links to
@@ -258,7 +258,7 @@ decisions to disk as the task advances, so:
 
 ### Convention
 
-- **Path**: `harness/scratch/<role>-<scope>-<uuid>.md`
+- **Path**: `plan/scratch/<role>-<scope>-<uuid>.md`
   - `<role>` is human-readable: `research-data-sherpa`, `prompt`,
     `impl-F01`, `debug-F03`, `test-F02`, `recovery-F01-1`.
   - `<uuid>` is generated once at start: `uuidgen | tr 'A-Z' 'a-z'`.
@@ -291,12 +291,12 @@ Bad entries (skip these — they are noise):
 When the parent dispatches a wave's pipelines in parallel, every
 finding-pipeline's subagents share the same finding ID prefix
 (`impl-F01`, `debug-F01`, `test-F01`) but have unique UUIDs. The
-parent can search `harness/scratch/*-F0N-*` to find every scratchpad
+parent can search `plan/scratch/*-F0N-*` to find every scratchpad
 related to one finding when writing the wrap-up report.
 
-Recommend gitignoring `harness/scratch/` (working memory is noise);
-keep `harness/findings.md`, `harness/pipelines.md`,
-`harness/prompts/`, and `harness/report.md` in version control.
+Recommend gitignoring `plan/scratch/` (working memory is noise);
+keep `plan/findings.md`, `plan/pipelines.md`,
+`plan/prompts/`, and `plan/report.md` in version control.
 
 ## File templates
 
@@ -372,16 +372,16 @@ See `${CLAUDE_SKILL_DIR}/examples/` for worked examples:
 
 Before declaring the harness done:
 
-- [ ] `harness/objective.md` exists and matches what was actually done
-- [ ] `harness/findings.md` has a row for every finding, with status
+- [ ] `plan/objective.md` exists and matches what was actually done
+- [ ] `plan/findings.md` has a row for every finding, with status
       AND `Depends on` / `Touches files` columns filled in
-- [ ] `harness/pipelines.md` shows the wave plan that was actually
+- [ ] `plan/pipelines.md` shows the wave plan that was actually
       executed (annotate any waves that ran serially-by-recovery)
-- [ ] `harness/prompts/` has one file per executed finding, plus any
+- [ ] `plan/prompts/` has one file per executed finding, plus any
       `.recovery-N.md` files
-- [ ] `harness/scratch/` has at least one scratchpad per subagent
+- [ ] `plan/scratch/` has at least one scratchpad per subagent
       invocation that ran
-- [ ] `harness/report.md` summarises completions and any deferred items
+- [ ] `plan/report.md` summarises completions and any deferred items
 - [ ] CHANGELOG / ADRs updated per repo conventions
 - [ ] All tests pass; lints clean
 - [ ] Deferred findings are listed in the backlog with a one-line

@@ -38,17 +38,17 @@ Your ONLY job is to read, analyse, and write structured findings. You do NOT edi
 
 ## Allowed writes
 
-- `harness/scratch/<role>-<scope>-<uuid>.md` — your scratchpad
-- `harness/findings/research-<area>.md` — your structured output
+- `plan/scratch/<role>-<scope>-<uuid>.md` — your scratchpad
+- `plan/findings/research-<area>.md` — your structured output
 
-NEVER edit code outside `harness/`.
+NEVER edit code outside `plan/`.
 
 ## Scratchpad protocol
 
 Before any other work:
 
 1. Run `uuidgen | tr 'A-Z' 'a-z'` once via the Bash tool. Capture the UUID.
-2. Create `harness/scratch/research-<short-scope>-<uuid>.md` from the scratchpad template provided by the parent. The `<short-scope>` is a kebab-cased version of the directory you own (e.g. `data-sherpa`, `routes`, `auth`).
+2. Create `plan/scratch/research-<short-scope>-<uuid>.md` from the scratchpad template provided by the parent. The `<short-scope>` is a kebab-cased version of the directory you own (e.g. `data-sherpa`, `routes`, `auth`).
 3. Fill in the Identity + Task input sections immediately.
 4. Append to "Inputs read" / "Hypotheses" / "Progress log" / "Decisions" as you work — at least one line per file you read meaningfully.
 5. Your final message MUST cite the scratchpad path so the parent can locate it.
@@ -60,7 +60,7 @@ The parent will pass you:
 - A **scope** (one directory, one feature, or one file).
 - A **focus** (e.g. "correctness bugs", "perf regressions", "missing tests", "security gaps").
 - The path to the finding template — produce one entry per issue.
-- The path to write your findings file to (e.g. `harness/findings/research-<scope>.md`).
+- The path to write your findings file to (e.g. `plan/findings/research-<scope>.md`).
 
 ## Workflow
 

@@ -36,7 +36,7 @@ You are the debug subagent in a multi-agent harness. You diagnose, you do not fi
 
 ## Scratchpad protocol
 
-Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `harness/scratch/debug-F0N-<uuid>.md` from the scratchpad template. Your scratchpad is structurally similar to your final note (Symptom / Root cause / Recommended patch / Verification) — keep them in sync as you work. Cite the scratchpad path in your final message.
+Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `plan/scratch/debug-F0N-<uuid>.md` from the scratchpad template. Your scratchpad is structurally similar to your final note (Symptom / Root cause / Recommended patch / Verification) — keep them in sync as you work. Cite the scratchpad path in your final message.
 
 ## When invoked
 
@@ -77,5 +77,5 @@ Final message has exactly four sections:
 ## Verification
 <how the impl agent confirms the patch fixes the symptom>
 
-Scratchpad: harness/scratch/debug-F0N-<uuid>.md
+Scratchpad: plan/scratch/debug-F0N-<uuid>.md
 ```

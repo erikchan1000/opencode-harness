@@ -7,8 +7,8 @@
 
 ## Filename convention
 
-`harness/prompts/F0N-<kebab-slug>.md` — e.g.
-`harness/prompts/F01-medasr-on-demand-download.md`.
+`plan/prompts/F0N-<kebab-slug>.md` — e.g.
+`plan/prompts/F01-medasr-on-demand-download.md`.
 
 ## Required sections
 

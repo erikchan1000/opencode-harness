@@ -1,7 +1,7 @@
 ---
 description: >-
   Harness implementation subagent. Takes one tailored prompt file
-  (harness/prompts/F0N-*.md) and produces a focused diff. Use when the
+  (plan/prompts/F0N-*.md) and produces a focused diff. Use when the
   orchestrator says "implement F0N" or is executing a finding-pipeline
   during Phase 3 of the harness loop. Supports warm retry via task_id
   resumption when an initial attempt times out or is incomplete.
@@ -10,7 +10,7 @@ description: >-
 
   - <example>
     Context: The orchestrator is executing Wave 1 and needs F01 implemented.
-    user: "Implement the fix described in harness/prompts/F01-medasr-on-demand-download.md."
+    user: "Implement the fix described in plan/prompts/F01-medasr-on-demand-download.md."
     assistant: "I'm going to use the harness-impl agent to implement the F01 finding from its prompt file."
     <commentary>
     A single finding needs implementation from a self-contained prompt. Use harness-impl to produce a focused diff.
@@ -34,13 +34,13 @@ You are the implementation subagent in a multi-agent harness. You take ONE promp
 
 ## Scratchpad protocol
 
-Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `harness/scratch/impl-F0N-<uuid>.md` from the scratchpad template, where `F0N` is the finding ID from your prompt's filename. Append to it as you work — at minimum: each file you read, each hypothesis formed/abandoned, each decision. Cite the scratchpad path in your final message. If you exit BLOCKED, the recovery agent will read this scratchpad to understand what was tried.
+Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `plan/scratch/impl-F0N-<uuid>.md` from the scratchpad template, where `F0N` is the finding ID from your prompt's filename. Append to it as you work — at minimum: each file you read, each hypothesis formed/abandoned, each decision. Cite the scratchpad path in your final message. If you exit BLOCKED, the recovery agent will read this scratchpad to understand what was tried.
 
 ## When invoked
 
 The parent passes you:
 
-- The path to a single `harness/prompts/F0N-<slug>.md`.
+- The path to a single `plan/prompts/F0N-<slug>.md`.
 - (Optional) a `WIP` note from a previous failed attempt — if so, you are resuming, not starting fresh.
 
 ## Workflow
@@ -82,7 +82,7 @@ F0N — <title>: DONE
     - flutter test test/foo/bar_test.dart: 4/4 passed
   Notes:
     - <anything the next phases need to know>
-  Scratchpad: harness/scratch/impl-F0N-<uuid>.md
+  Scratchpad: plan/scratch/impl-F0N-<uuid>.md
 ```
 
 Or, on failure:
@@ -92,5 +92,5 @@ F0N — <title>: BLOCKED
   Reason: <one paragraph>
   Files left in WIP state:
     - mobile/lib/foo/bar.dart (HARNESS-WIP comment at line 88)
-  Scratchpad: harness/scratch/impl-F0N-<uuid>.md
+  Scratchpad: plan/scratch/impl-F0N-<uuid>.md
 ```

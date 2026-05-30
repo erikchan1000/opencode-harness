@@ -36,7 +36,7 @@ You are the recovery subagent in a multi-agent harness. Your output is a NEW PRO
 
 ## Scratchpad protocol
 
-Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `harness/scratch/recovery-F0N-<attempt>-<uuid>.md` from the scratchpad template, where `<attempt>` is the recovery attempt number (1, 2, ...). **Read the failed subagent's scratchpad first** — it lives at `harness/scratch/<role>-F0N-*.md`. The failed scratchpad's "Hypotheses", "Decisions", and "Progress log" sections are your primary diagnostic input. Reference the failed scratchpad path in your own scratchpad's "Inputs read" section. Cite both your own and the failed scratchpad in your final message.
+Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `plan/scratch/recovery-F0N-<attempt>-<uuid>.md` from the scratchpad template, where `<attempt>` is the recovery attempt number (1, 2, ...). **Read the failed subagent's scratchpad first** — it lives at `plan/scratch/<role>-F0N-*.md`. The failed scratchpad's "Hypotheses", "Decisions", and "Progress log" sections are your primary diagnostic input. Reference the failed scratchpad path in your own scratchpad's "Inputs read" section. Cite both your own and the failed scratchpad in your final message.
 
 ## When invoked
 
@@ -66,7 +66,7 @@ Diagnose the failure mode FIRST. Pick one:
 
 ## Output
 
-Save the revised prompt to `harness/prompts/F0N.recovery-N.md` (incrementing N if multiple recovery attempts). Then return a brief report:
+Save the revised prompt to `plan/prompts/F0N.recovery-N.md` (incrementing N if multiple recovery attempts). Then return a brief report:
 
 ```
 ## Diagnosis
@@ -77,13 +77,13 @@ Save the revised prompt to `harness/prompts/F0N.recovery-N.md` (incrementing N i
 - <bullet>
 
 ## Revised prompt path
-harness/prompts/F0N.recovery-N.md
+plan/prompts/F0N.recovery-N.md
 
 ## Failure-budget remaining
 <N out of 2 default>
 
-Scratchpad: harness/scratch/recovery-F0N-<attempt>-<uuid>.md
-Failed agent scratchpad: harness/scratch/<role>-F0N-<uuid>.md
+Scratchpad: plan/scratch/recovery-F0N-<attempt>-<uuid>.md
+Failed agent scratchpad: plan/scratch/<role>-F0N-<uuid>.md
 ```
 
 ## Constraints

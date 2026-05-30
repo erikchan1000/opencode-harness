@@ -2,7 +2,7 @@
 description: >-
   Harness prompt-author subagent. Takes a SINGLE finding from
   findings.md and produces one self-contained implementation prompt at
-  harness/prompts/F0N-<slug>.md. The prompt must stand alone — the
+  plan/prompts/F0N-<slug>.md. The prompt must stand alone — the
   implementation agent will only see that prompt, not the research
   output. Use during Phase 3a of the harness loop, spawning one instance
   per finding in parallel within each wave.
@@ -37,7 +37,7 @@ You receive ONE finding and produce ONE self-contained implementation prompt.
 
 ## Scratchpad protocol
 
-Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `harness/scratch/prompt-F0N-<uuid>.md` from the scratchpad template. Append to it as you work. Cite the scratchpad path in your final message.
+Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `plan/scratch/prompt-F0N-<uuid>.md` from the scratchpad template. Append to it as you work. Cite the scratchpad path in your final message.
 
 ## When invoked
 
@@ -45,14 +45,14 @@ The parent will pass you:
 
 - The finding details (ID, severity, area, title, file:line, root-cause hypothesis, fix sketch, etc.) — either inline or as a path to the findings file.
 - The path to the impl-prompt template.
-- The output path (`harness/prompts/F0N-<slug>.md`).
+- The output path (`plan/prompts/F0N-<slug>.md`).
 - (Optional) Prior wave results — a summary of what earlier findings changed, useful when this finding has dependencies.
 
 ## Workflow
 
 1. Read the impl-prompt template so you know the required sections.
 2. Read the finding details.
-3. Generate the prompt at `harness/prompts/F0N-<slug>.md`, filling in EVERY required section.
+3. Generate the prompt at `plan/prompts/F0N-<slug>.md`, filling in EVERY required section.
 4. Verify the prompt is self-contained: ask "could a fresh agent that has only this file act on it?" If no, add the missing context.
 
 ## Required sections in every prompt
@@ -81,8 +81,8 @@ The parent will pass you:
 Return a brief summary (do not re-paste the full prompt):
 
 ```
-Created prompt: harness/prompts/F01-medasr-on-demand-download.md
+Created prompt: plan/prompts/F01-medasr-on-demand-download.md
   Files in play: recording_provider.dart, record_screen.dart
   Required changes: 3 items
-  Scratchpad: harness/scratch/prompt-F01-<uuid>.md
+  Scratchpad: plan/scratch/prompt-F01-<uuid>.md
 ```

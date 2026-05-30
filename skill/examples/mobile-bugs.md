@@ -7,7 +7,7 @@
 ## Phase 0 — Scope
 
 ```markdown
-# harness/objective.md
+# plan/objective.md
 
 ## One-line objective
 Find and fix correctness / UX bugs in the mobile recording pipeline
@@ -60,7 +60,7 @@ Task(subagent_type: "harness-research",
               ...")
 ```
 
-After all three return, merge into `harness/findings.md`:
+After all three return, merge into `plan/findings.md`:
 
 ```markdown
 | ID  | Severity | Area      | Title                                  | File:Line                              | Depends on | Touches files                                                  |
@@ -78,8 +78,8 @@ Run `build_pipelines.py` instead of spawning a planner agent:
 
 ```bash
 python "${CLAUDE_SKILL_DIR}/scripts/build_pipelines.py" \
-  --findings harness/findings.md \
-  --output   harness/pipelines.md \
+  --findings plan/findings.md \
+  --output   plan/pipelines.md \
   --title    "Mobile recording pipeline bugs"
 ```
 
@@ -87,7 +87,7 @@ Output:
 
 ```
 Parsed 5 findings
-Wrote harness/pipelines.md
+Wrote plan/pipelines.md
   Waves: 2, Max parallelism: 3
   Wave 1: F01, F02, F03
   Wave 2: F04, F05
@@ -126,7 +126,7 @@ Task(subagent_type: "harness-prompt",
      prompt: "Finding: F01 — MedASR not auto-downloaded on Refine
               <full finding details>
               Template: ${CLAUDE_SKILL_DIR}/templates/impl-prompt.md
-              Output: harness/prompts/F01-medasr-on-demand-download.md")
+              Output: plan/prompts/F01-medasr-on-demand-download.md")
 
 Task(subagent_type: "harness-prompt", prompt: "Finding: F02 ...")
 Task(subagent_type: "harness-prompt", prompt: "Finding: F03 ...")
@@ -154,7 +154,7 @@ Task(subagent_type: "harness-prompt",
               recording_provider.dart:295 and a download progress UI at
               record_screen.dart:120.
               Template: ${CLAUDE_SKILL_DIR}/templates/impl-prompt.md
-              Output: harness/prompts/F04-diarization-fullbuffer.md")
+              Output: plan/prompts/F04-diarization-fullbuffer.md")
 ```
 
 This is the JIT advantage — F04's prompt knows exactly what F01 changed

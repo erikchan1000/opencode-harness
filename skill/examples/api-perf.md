@@ -7,7 +7,7 @@
 ## Phase 0 — Scope
 
 ```markdown
-# harness/objective.md
+# plan/objective.md
 
 ## One-line objective
 Identify P99 latency regressions in the Fastify backend's hot
@@ -70,8 +70,8 @@ Same `build_pipelines.py` script, no changes:
 
 ```bash
 python "${CLAUDE_SKILL_DIR}/scripts/build_pipelines.py" \
-  --findings harness/findings.md \
-  --output   harness/pipelines.md \
+  --findings plan/findings.md \
+  --output   plan/pipelines.md \
   --title    "Backend P99 latency regressions"
 ```
 
@@ -95,7 +95,7 @@ Same loop. Two differences from the mobile example:
 
 ## Phase 4 — Wrap
 
-Aggregate, write a perf summary to `harness/report.md`, link to each
+Aggregate, write a perf summary to `plan/report.md`, link to each
 ADR.
 
 ## Takeaway

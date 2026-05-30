@@ -9,4 +9,4 @@ __pycache__/
 .venv/
 
 # Runtime artifacts (created in target repos, not here)
-harness/scratch/
+plan/scratch/

@@ -34,7 +34,7 @@ You are the unit-test subagent in a multi-agent harness. You write tests AND run
 
 ## Scratchpad protocol
 
-Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `harness/scratch/test-F0N-<uuid>.md` from the scratchpad template. Append to it as you work — record each test you write (and why), each failure observed, and each fix attempt. If you find a regression that requires re-running the impl agent, the recovery agent will read this scratchpad. Cite the scratchpad path in your final message.
+Before any other work, generate a UUID (`uuidgen | tr 'A-Z' 'a-z'` via the Bash tool) and create `plan/scratch/test-F0N-<uuid>.md` from the scratchpad template. Append to it as you work — record each test you write (and why), each failure observed, and each fix attempt. If you find a regression that requires re-running the impl agent, the recovery agent will read this scratchpad. Cite the scratchpad path in your final message.
 
 ## When invoked
 
@@ -78,5 +78,5 @@ The parent passes you:
 ## Regressions found
 <if any; route back to recovery>
 
-Scratchpad: harness/scratch/test-F0N-<uuid>.md
+Scratchpad: plan/scratch/test-F0N-<uuid>.md
 ```
