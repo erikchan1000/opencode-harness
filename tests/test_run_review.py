@@ -49,13 +49,13 @@ class TestResolveApiKey:
             assert result == ("groq", "gsk-test")
 
     def test_returns_none_when_no_keys(self):
-        """Should return None when no API keys are set."""
+        """Should return None when no API keys or secrets file."""
         with patch.dict(os.environ, {}, clear=True):
-            # Clear all relevant env vars
             for key in ("OPENAI_KEY", "ANTHROPIC_KEY", "GROQ_API_KEY", "DEEPSEEK_KEY"):
                 os.environ.pop(key, None)
-            result = run_review._resolve_api_key("any-model")
-            assert result is None
+            with patch.object(run_review, "_read_secrets_toml", return_value={}):
+                result = run_review._resolve_api_key("any-model")
+                assert result is None
 
     def test_anthropic_key_preferred_for_anthropic_model(self):
         """When both keys present, should pick the right one for the model."""
@@ -71,6 +71,73 @@ class TestResolveApiKey:
         with patch.dict(os.environ, {"OPENAI_KEY": "sk-oai"}, clear=True):
             result = run_review._resolve_api_key("some-random-model")
             assert result == ("openai", "sk-oai")
+
+    def test_secrets_file_fallback_anthropic(self):
+        """Should read from secrets.toml when env vars are empty."""
+        with patch.dict(os.environ, {}, clear=True):
+            for key in ("OPENAI_KEY", "ANTHROPIC_KEY", "GROQ_API_KEY", "DEEPSEEK_KEY"):
+                os.environ.pop(key, None)
+            with patch.object(run_review, "_read_secrets_toml", return_value={
+                "anthropic": {"key": "sk-ant-from-file"},
+            }):
+                result = run_review._resolve_api_key("anthropic/claude-sonnet")
+                assert result == ("anthropic", "sk-ant-from-file")
+
+    def test_secrets_file_fallback_openai(self):
+        """Should read OpenAI key from secrets.toml."""
+        with patch.dict(os.environ, {}, clear=True):
+            for key in ("OPENAI_KEY", "ANTHROPIC_KEY", "GROQ_API_KEY", "DEEPSEEK_KEY"):
+                os.environ.pop(key, None)
+            with patch.object(run_review, "_read_secrets_toml", return_value={
+                "openai": {"key": "sk-oai-from-file"},
+            }):
+                result = run_review._resolve_api_key("gpt-4o")
+                assert result == ("openai", "sk-oai-from-file")
+
+    def test_env_var_takes_precedence_over_secrets_file(self):
+        """Env var should win over secrets.toml."""
+        with patch.dict(os.environ, {"ANTHROPIC_KEY": "sk-from-env"}):
+            with patch.object(run_review, "_read_secrets_toml", return_value={
+                "anthropic": {"key": "sk-from-file"},
+            }):
+                result = run_review._resolve_api_key("anthropic/claude-sonnet")
+                assert result == ("anthropic", "sk-from-env")
+
+
+class TestReadSecretsToml:
+    """Tests for _read_secrets_toml()."""
+
+    def test_reads_valid_file(self, tmp_path: Path):
+        """Should parse sections and keys from TOML."""
+        secrets_file = tmp_path / "secrets.toml"
+        secrets_file.write_text('[anthropic]\nKEY = "sk-test-key"\n')
+        with patch.object(run_review, "SECRETS_PATH", secrets_file):
+            result = run_review._read_secrets_toml()
+            assert result == {"anthropic": {"key": "sk-test-key"}}
+
+    def test_handles_missing_file(self, tmp_path: Path):
+        """Should return empty dict when file doesn't exist."""
+        with patch.object(run_review, "SECRETS_PATH", tmp_path / "nonexistent.toml"):
+            assert run_review._read_secrets_toml() == {}
+
+    def test_handles_multiple_sections(self, tmp_path: Path):
+        """Should parse multiple provider sections."""
+        secrets_file = tmp_path / "secrets.toml"
+        secrets_file.write_text(
+            '[anthropic]\nKEY = "sk-ant"\n\n[openai]\nkey = "sk-oai"\n'
+        )
+        with patch.object(run_review, "SECRETS_PATH", secrets_file):
+            result = run_review._read_secrets_toml()
+            assert result["anthropic"]["key"] == "sk-ant"
+            assert result["openai"]["key"] == "sk-oai"
+
+    def test_ignores_comments(self, tmp_path: Path):
+        """Should skip comment lines."""
+        secrets_file = tmp_path / "secrets.toml"
+        secrets_file.write_text('# comment\n[anthropic]\n# another\nKEY = "sk-test"\n')
+        with patch.object(run_review, "SECRETS_PATH", secrets_file):
+            result = run_review._read_secrets_toml()
+            assert result["anthropic"]["key"] == "sk-test"
 
 
 class TestBuildConfig:

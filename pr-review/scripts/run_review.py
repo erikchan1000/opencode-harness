@@ -61,25 +61,63 @@ def _resolve_model() -> str:
     return os.environ.get("PR_AGENT_MODEL", DEFAULT_MODEL)
 
 
+SECRETS_PATH = Path.home() / ".pr_agent_secrets.toml"
+
+
+def _read_secrets_toml() -> dict[str, dict[str, str]]:
+    """Read ~/.pr_agent_secrets.toml and return parsed sections.
+
+    Expected format:
+        [anthropic]
+        KEY = "sk-ant-..."
+
+        [openai]
+        key = "sk-..."
+    """
+    if not SECRETS_PATH.exists():
+        return {}
+    try:
+        # Minimal TOML parser — handles [section] + KEY = "value" lines.
+        # Avoids adding a toml dependency.
+        sections: dict[str, dict[str, str]] = {}
+        current_section = ""
+        for line in SECRETS_PATH.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                current_section = line[1:-1].strip().lower()
+                sections.setdefault(current_section, {})
+            elif "=" in line and current_section:
+                k, _, v = line.partition("=")
+                v = v.strip().strip('"').strip("'")
+                sections[current_section][k.strip().lower()] = v
+        return sections
+    except OSError:
+        return {}
+
+
 def _resolve_api_key(model: str) -> tuple[str, str] | None:
     """Resolve the API key for the given model.
 
-    Returns (key_name, key_value) or None if not found.
+    Resolution order:
+      1. Environment variables (ANTHROPIC_KEY, OPENAI_KEY, etc.)
+      2. ~/.pr_agent_secrets.toml
+
+    Returns (provider_name, key_value) or None if not found.
     """
     model_lower = model.lower()
 
-    # Anthropic models
+    # --- 1. Environment variables ---
     if "anthropic" in model_lower or "claude" in model_lower:
         key = os.environ.get("ANTHROPIC_KEY")
         if key:
             return ("anthropic", key)
 
-    # OpenAI models (default)
     key = os.environ.get("OPENAI_KEY")
     if key:
         return ("openai", key)
 
-    # Fallback: check for any known key
     for env_var, provider in [
         ("ANTHROPIC_KEY", "anthropic"),
         ("OPENAI_KEY", "openai"),
@@ -89,6 +127,23 @@ def _resolve_api_key(model: str) -> tuple[str, str] | None:
         key = os.environ.get(env_var)
         if key:
             return (provider, key)
+
+    # --- 2. Secrets file ---
+    secrets = _read_secrets_toml()
+
+    if "anthropic" in model_lower or "claude" in model_lower:
+        key = secrets.get("anthropic", {}).get("key")
+        if key:
+            return ("anthropic", key)
+
+    key = secrets.get("openai", {}).get("key")
+    if key:
+        return ("openai", key)
+
+    for provider_name in ("anthropic", "openai", "groq", "deepseek"):
+        key = secrets.get(provider_name, {}).get("key")
+        if key:
+            return (provider_name, key)
 
     return None
 
@@ -259,7 +314,8 @@ def main() -> int:
     if not api_key_info:
         print(
             "error: no LLM API key found. Set one of: "
-            "OPENAI_KEY, ANTHROPIC_KEY, GROQ_API_KEY, DEEPSEEK_KEY",
+            "OPENAI_KEY, ANTHROPIC_KEY, GROQ_API_KEY, DEEPSEEK_KEY "
+            "or add keys to ~/.pr_agent_secrets.toml",
             file=sys.stderr,
         )
         return 2
