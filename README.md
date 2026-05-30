@@ -51,13 +51,14 @@ The system handles the hard parts of multi-agent orchestration: context isolatio
                     └──────────────┘
 ```
 
-### The six roles
+### The seven roles
 
 | Role | Agent | Edits code? | Purpose |
 |------|-------|-------------|---------|
 | **Research** | `harness-research` | No | Explore codebase, produce structured findings with file:line refs |
 | **Prompt author** | `harness-prompt` | No | Write self-contained implementation prompts per finding |
 | **Implementation** | `harness-impl` | Yes | Execute one prompt, produce one focused diff |
+| **Review** | `harness-review` | No | Run PR-Agent to review impl diff before tests |
 | **Debug** | `harness-debug` | No | Root-cause analysis when impl fails or regresses |
 | **Unit test** | `harness-test` | Yes | Write + run tests as quality gate before marking done |
 | **Recovery** | `harness-recovery` | No | Rewrite failed prompts with narrower scope for cold retry |
@@ -72,12 +73,13 @@ The system handles the hard parts of multi-agent orchestration: context isolatio
 ## Repository structure
 
 ```
-opencode-plan/
+opencode-harness/
 ├── README.md
 ├── LICENSE
 ├── install.sh              # Symlink into ~/.config/opencode/
+├── pyproject.toml          # Dev deps (pytest) for running tests
 │
-├── skill/                  # The OpenCode skill (installed as a unit)
+├── skill/                  # create-harness skill (orchestration methodology)
 │   ├── SKILL.md            # Master orchestration methodology (388 lines)
 │   ├── templates/
 │   │   ├── objective.md    # Phase 0 — scope definition
@@ -91,13 +93,32 @@ opencode-plan/
 │       ├── mobile-bugs.md  # Worked example: Flutter recording pipeline
 │       └── api-perf.md     # Worked example: REST backend latency
 │
-└── agents/                 # Subagent definitions (installed individually)
-    ├── harness-research.md
-    ├── harness-prompt.md
-    ├── harness-impl.md
-    ├── harness-debug.md
-    ├── harness-test.md
-    └── harness-recovery.md
+├── pr-review/              # pr-review skill (AI code review via PR-Agent)
+│   ├── SKILL.md            # Skill definition + trigger patterns
+│   ├── scripts/
+│   │   ├── ensure_installed.py  # Check/install pr-agent in isolated venv
+│   │   ├── run_review.py        # Invoke pr-agent CLI, capture output
+│   │   └── parse_output.py      # Parse markdown output → structured findings
+│   └── templates/
+│       └── pr_agent.toml        # Default review config template
+│
+├── agents/                 # Subagent definitions (installed individually)
+│   ├── harness-research.md
+│   ├── harness-prompt.md
+│   ├── harness-impl.md
+│   ├── harness-review.md   # Code review gate (between impl and test)
+│   ├── harness-debug.md
+│   ├── harness-test.md
+│   └── harness-recovery.md
+│
+└── tests/                  # pytest test suite
+    ├── conftest.py
+    ├── test_ensure_installed.py
+    ├── test_run_review.py
+    ├── test_parse_output.py
+    └── fixtures/
+        ├── sample_review_output.md
+        └── sample_diff.patch
 ```
 
 ## Installation
@@ -113,8 +134,9 @@ This creates symlinks from your OpenCode config to the repo, so updates are pick
 ### Manual install (copy)
 
 ```bash
-# Install the skill
-cp -r skill/ ~/.config/opencode/skills/create-plan/
+# Install the skills
+cp -r skill/ ~/.config/opencode/skills/create-harness/
+cp -r pr-review/ ~/.config/opencode/skills/pr-review/
 
 # Install the agent definitions
 cp agents/harness-*.md ~/.config/opencode/agent/
@@ -122,7 +144,7 @@ cp agents/harness-*.md ~/.config/opencode/agent/
 
 ### Verify
 
-After installing, the skill appears in OpenCode's available skills list, and the six `harness-*` agent types become available to the Task tool.
+After installing, both skills appear in OpenCode's available skills list, and the seven `harness-*` agent types become available to the Task tool.
 
 ## Usage
 
@@ -153,6 +175,42 @@ OpenCode (orchestrator):
           → Wave 2: JIT prompts with Wave 1 context, runs remaining pipelines
   Phase 4 → writes plan/report.md, surfaces summary
 ```
+
+### PR Review skill
+
+The `pr-review` skill provides AI-powered code review using
+[PR-Agent](https://github.com/The-PR-Agent/pr-agent). It runs locally
+with your own LLM API key (BYOK).
+
+```
+You: "/pr-review" or "review my changes"
+
+OpenCode:
+  1. Ensures PR-Agent is installed (isolated venv)
+  2. Runs pr-agent review against local diff
+  3. Parses output into structured findings
+  4. Presents results with severity, file, line, problem, fix
+```
+
+#### Environment variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PR_AGENT_MODEL` | No | `anthropic/claude-sonnet-4-20250514` | LLM model |
+| `OPENAI_KEY` | If using OpenAI | - | OpenAI API key |
+| `ANTHROPIC_KEY` | If using Claude | - | Anthropic API key |
+
+#### Harness integration
+
+When the `harness-review` agent is available, the finding pipeline
+becomes:
+
+```
+prompt → impl → review → test
+```
+
+The review agent produces a verdict: `PASS` (proceed to test),
+`NEEDS_FIX` (route back to impl), or `BLOCKED` (escalate).
 
 ### The DAG builder
 
@@ -196,7 +254,20 @@ plan/scratch/
 ## Requirements
 
 - [OpenCode](https://opencode.ai) with Task tool support
-- Python 3.10+ (for `build_pipelines.py`)
+- Python 3.10+ (for `build_pipelines.py` and pr-review scripts)
+- An LLM API key (for pr-review skill: `OPENAI_KEY`, `ANTHROPIC_KEY`, etc.)
+- `git` CLI (for pr-review local diff mode)
+- `gh` CLI (optional, for PR URL auto-detection)
+
+## Development
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest tests/ -v
+```
 
 ## License
 

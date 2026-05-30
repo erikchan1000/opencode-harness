@@ -1,0 +1,14 @@
+[project]
+name = "opencode-harness"
+version = "0.2.0"
+description = "Multi-subagent orchestration system for OpenCode"
+requires-python = ">=3.10"
+license = "MIT"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

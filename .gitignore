@@ -7,6 +7,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.pytest_cache/
 
 # Runtime artifacts (created in target repos, not here)
 plan/scratch/
