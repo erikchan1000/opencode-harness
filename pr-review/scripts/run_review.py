@@ -33,12 +33,9 @@ Exit codes:
 """
 
 import argparse
-import json
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -103,16 +100,22 @@ def _read_secrets_toml() -> dict[str, dict[str, str]]:
         # Avoids adding a toml dependency.
         sections: dict[str, dict[str, str]] = {}
         current_section = ""
-        for line in SECRETS_PATH.read_text().splitlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
+        for raw_line in SECRETS_PATH.read_text().splitlines():
+            stripped = raw_line.strip()
+            if not stripped or stripped.startswith("#"):
                 continue
-            if line.startswith("[") and line.endswith("]"):
-                current_section = line[1:-1].strip().lower()
+            if stripped.startswith("[") and stripped.endswith("]"):
+                current_section = stripped[1:-1].strip().lower()
                 sections.setdefault(current_section, {})
-            elif "=" in line and current_section:
-                k, _, v = line.partition("=")
-                v = v.strip().strip('"').strip("'")
+            elif "=" in stripped and current_section:
+                k, _, rest = stripped.partition("=")
+                rest = rest.strip()
+                # Handle quoted values (preserves = signs inside quotes)
+                if (rest.startswith('"') and rest.endswith('"')) or \
+                   (rest.startswith("'") and rest.endswith("'")):
+                    v = rest[1:-1]
+                else:
+                    v = rest
                 sections[current_section][k.strip().lower()] = v
         return sections
     except OSError:
@@ -184,60 +187,6 @@ def _resolve_api_key(model: str) -> tuple[str, str] | None:
 
     return None
 
-
-def _build_config(
-    model: str,
-    extra_instructions: str,
-    local_mode: bool,
-) -> str:
-    """Build a .pr_agent.toml config string (non-secret settings only)."""
-
-    lines = [
-        "[config]",
-        f'model = "{model}"',
-        "publish_output = false",
-        "verbosity_level = 0",
-    ]
-
-    if local_mode:
-        lines.append('git_provider = "local"')
-    else:
-        lines.append('git_provider = "github"')
-
-    lines.append("")
-
-    # NOTE: LLM keys and GitHub token are passed as env vars
-    # (ANTHROPIC__KEY, GITHUB__USER_TOKEN, etc.) rather than in the
-    # config file, because PR-Agent's dynaconf reads secrets from
-    # env vars with double-underscore notation.
-    lines.append("")
-
-    # Reviewer config
-    lines.extend([
-        "[pr_reviewer]",
-        "require_score_review = true",
-        "require_tests_review = true",
-        "require_security_review = true",
-        "require_estimate_effort_to_review = true",
-        "num_max_findings = 10",
-        "persistent_comment = false",
-    ])
-
-    if extra_instructions:
-        # Escape quotes in instructions
-        escaped = extra_instructions.replace('"', '\\"')
-        lines.append(f'extra_instructions = "{escaped}"')
-    lines.append("")
-
-    # Code suggestions config
-    lines.extend([
-        "[pr_code_suggestions]",
-        "num_code_suggestions_per_chunk = 4",
-        "max_number_of_calls = 3",
-        "focus_only_on_problems = true",
-    ])
-
-    return "\n".join(lines)
 
 
 def _get_local_pr_url() -> str | None:
@@ -314,11 +263,6 @@ def main() -> int:
         default="",
         help="Extra review instructions (e.g., 'Focus on HIPAA compliance')",
     )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Wrap output in JSON with metadata",
-    )
     args = parser.parse_args()
 
     # Validate args
@@ -360,64 +304,51 @@ def main() -> int:
             # Fall back to a dummy URL for local mode
             pr_url = "https://github.com/local/repo/pull/0"
 
-    # Build config
-    config_content = _build_config(
-        model=model,
-        extra_instructions=args.extra_instructions,
-        local_mode=args.local,
+    # Build CLI command with inline config overrides.
+    # PR-Agent reads these as --section.key=value via dynaconf.
+    cmd = [
+        str(python), "-m", "pr_agent.cli",
+        f"--pr_url={pr_url}",
+        args.command,
+        f"--config.model={model}",
+        "--config.publish_output=false",
+        "--config.verbosity_level=2",
+        f"--config.fallback_models=[\"{model}\"]",
+        "--pr_reviewer.require_score_review=true",
+        "--pr_reviewer.require_tests_review=true",
+        "--pr_reviewer.require_security_review=true",
+        "--pr_reviewer.require_estimate_effort_to_review=true",
+        "--pr_reviewer.num_max_findings=10",
+    ]
+
+    if args.extra_instructions:
+        cmd.append(f"--pr_reviewer.extra_instructions={args.extra_instructions}")
+
+    # Set up env vars for secrets (dynaconf SECTION__KEY format)
+    env = os.environ.copy()
+    provider, key = api_key_info
+
+    if provider == "anthropic":
+        env["ANTHROPIC__KEY"] = key
+    elif provider == "openai":
+        env["OPENAI__KEY"] = key
+    elif provider == "groq":
+        env["GROQ__KEY"] = key
+    elif provider == "deepseek":
+        env["DEEPSEEK__KEY"] = key
+
+    # GitHub token for PR access
+    github_token = os.environ.get("GITHUB_TOKEN") or _resolve_github_token()
+    if github_token:
+        env["GITHUB__USER_TOKEN"] = github_token
+
+    print(
+        f"Running: pr-agent {args.command} (model={model}, "
+        f"provider={api_key_info[0]})",
+        file=sys.stderr,
     )
 
-    # Write temp config and run pr-agent
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".toml", prefix="pr_agent_", delete=False
-    ) as f:
-        f.write(config_content)
-        config_path = f.name
-
     try:
-        cmd = [
-            str(python), "-m", "pr_agent.cli",
-            f"--pr_url={pr_url}",
-            args.command,
-            # Inline config overrides (PR-Agent reads these as --section.key=value)
-            f"--config.model={model}",
-            "--config.publish_output=false",
-            "--config.verbosity_level=2",
-            f"--config.fallback_models=[\"{model}\"]",
-            "--pr_reviewer.require_score_review=true",
-            "--pr_reviewer.require_tests_review=true",
-            "--pr_reviewer.require_security_review=true",
-            "--pr_reviewer.require_estimate_effort_to_review=true",
-            "--pr_reviewer.num_max_findings=10",
-        ]
-
-        if args.extra_instructions:
-            cmd.append(f"--pr_reviewer.extra_instructions={args.extra_instructions}")
-
-        env = os.environ.copy()
-
-        # PR-Agent uses dynaconf which reads env vars as SECTION__KEY
-        provider, key = api_key_info
-        if provider == "anthropic":
-            env["ANTHROPIC__KEY"] = key
-        elif provider == "openai":
-            env["OPENAI__KEY"] = key
-        elif provider == "groq":
-            env["GROQ__KEY"] = key
-        elif provider == "deepseek":
-            env["DEEPSEEK__KEY"] = key
-
-        # GitHub token for PR access
-        github_token = os.environ.get("GITHUB_TOKEN") or _resolve_github_token()
-        if github_token:
-            env["GITHUB__USER_TOKEN"] = github_token
-
-        print(
-            f"Running: pr-agent {args.command} (model={model}, "
-            f"provider={api_key_info[0]})",
-            file=sys.stderr,
-        )
-
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -425,51 +356,25 @@ def main() -> int:
             timeout=600,  # 10 min timeout
             env=env,
         )
-
-        output = result.stdout
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
-
-        if result.returncode != 0:
-            print(
-                f"error: pr-agent exited with code {result.returncode}",
-                file=sys.stderr,
-            )
-            if args.json:
-                print(json.dumps({
-                    "success": False,
-                    "exit_code": result.returncode,
-                    "output": output,
-                    "error": result.stderr,
-                    "model": model,
-                    "command": args.command,
-                }))
-            elif output:
-                print(output)
-            return 1
-
-        if args.json:
-            print(json.dumps({
-                "success": True,
-                "exit_code": 0,
-                "output": output,
-                "model": model,
-                "command": args.command,
-                "pr_url": pr_url,
-            }))
-        else:
-            print(output)
-
-        return 0
-
     except subprocess.TimeoutExpired:
         print("error: pr-agent timed out after 600s", file=sys.stderr)
         return 1
-    finally:
-        try:
-            os.unlink(config_path)
-        except OSError:
-            pass
+
+    output = result.stdout
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
+
+    if result.returncode != 0:
+        print(
+            f"error: pr-agent exited with code {result.returncode}",
+            file=sys.stderr,
+        )
+        if output:
+            print(output)
+        return 1
+
+    print(output)
+    return 0
 
 
 if __name__ == "__main__":

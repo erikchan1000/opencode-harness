@@ -139,48 +139,14 @@ class TestReadSecretsToml:
             result = run_review._read_secrets_toml()
             assert result["anthropic"]["key"] == "sk-test"
 
+    def test_handles_equals_in_value(self, tmp_path: Path):
+        """Should preserve = signs inside quoted values (e.g., base64 keys)."""
+        secrets_file = tmp_path / "secrets.toml"
+        secrets_file.write_text('[anthropic]\nKEY = "sk-ant-abc123+def=="\n')
+        with patch.object(run_review, "SECRETS_PATH", secrets_file):
+            result = run_review._read_secrets_toml()
+            assert result["anthropic"]["key"] == "sk-ant-abc123+def=="
 
-class TestBuildConfig:
-    """Tests for _build_config()."""
-
-    def test_basic_config_structure(self):
-        """Should produce valid TOML-like config."""
-        config = run_review._build_config(
-            model="anthropic/claude-opus-4-6",
-            extra_instructions="",
-            local_mode=False,
-        )
-        assert '[config]' in config
-        assert 'model = "anthropic/claude-opus-4-6"' in config
-        assert 'publish_output = false' in config
-
-    def test_local_mode_sets_local_provider(self):
-        """Should set git_provider to local when --local."""
-        config = run_review._build_config(
-            model="gpt-4o",
-            extra_instructions="",
-            local_mode=True,
-        )
-        assert 'git_provider = "local"' in config
-
-    def test_extra_instructions_included(self):
-        """Should include extra_instructions in reviewer config."""
-        config = run_review._build_config(
-            model="gpt-4o",
-            extra_instructions="Focus on HIPAA compliance",
-            local_mode=False,
-        )
-        assert "Focus on HIPAA compliance" in config
-
-    def test_no_secrets_in_config_file(self):
-        """Secrets should NOT appear in the config file."""
-        config = run_review._build_config(
-            model="gpt-4o",
-            extra_instructions="",
-            local_mode=False,
-        )
-        assert "[openai]" not in config
-        assert "[anthropic]" not in config
 
 
 class TestMainValidation:

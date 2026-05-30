@@ -66,11 +66,13 @@ def _find_python312() -> str | None:
     pyenv_root = Path.home() / ".pyenv" / "versions"
     if pyenv_root.is_dir():
         for version_dir in sorted(pyenv_root.iterdir(), reverse=True):
-            if not version_dir.name.startswith("3."):
+            name = version_dir.name
+            # Skip non-CPython entries (pypy, miniconda, etc.)
+            if not name[0].isdigit():
                 continue
-            parts = version_dir.name.split(".")
+            parts = name.split(".")
             try:
-                if (int(parts[0]), int(parts[1])) >= MIN_PYTHON:
+                if len(parts) >= 2 and (int(parts[0]), int(parts[1])) >= MIN_PYTHON:
                     candidate = version_dir / "bin" / "python3"
                     if candidate.exists():
                         return str(candidate)

@@ -196,7 +196,7 @@ OpenCode:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PR_AGENT_MODEL` | No | `anthropic/claude-sonnet-4-20250514` | LLM model |
+| `PR_AGENT_MODEL` | No | `anthropic/claude-opus-4-6` | LLM model |
 | `OPENAI_KEY` | If using OpenAI | - | OpenAI API key |
 | `ANTHROPIC_KEY` | If using Claude | - | Anthropic API key |
 
