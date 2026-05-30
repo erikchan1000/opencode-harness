@@ -185,11 +185,13 @@ def main() -> int:
                         f"{args.version} was requested (venv: {VENV_DIR})"
                     )
                 return 0
-            # Upgrade to requested version
+            # Upgrade: recreate venv (new version may need newer Python)
             print(
                 f"Upgrading pr-agent {installed_version} -> {args.version}...",
                 file=sys.stderr,
             )
+            if not _create_venv():
+                return 2
             if not _install_pr_agent(args.version):
                 return 2
             installed_version = _get_installed_version()

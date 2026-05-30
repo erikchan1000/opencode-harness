@@ -125,20 +125,16 @@ class TestMainInstall:
             "_get_installed_version",
             side_effect=[None, "0.35.0"],  # first call: not installed, second: installed
         ):
-            with patch.object(ensure_installed, "_python_bin") as mock_bin:
-                mock_bin.return_value = Path("/fake/bin/python")
-                with patch.object(Path, "exists", return_value=True):
-                    with patch.object(ensure_installed, "_install_pr_agent", return_value=True):
-                        with patch("sys.argv", ["ensure_installed.py", "--json"]):
-                            result = ensure_installed.main()
-                            assert result == 0
+            with patch.object(ensure_installed, "_create_venv", return_value=True):
+                with patch.object(ensure_installed, "_install_pr_agent", return_value=True):
+                    with patch("sys.argv", ["ensure_installed.py", "--json"]):
+                        result = ensure_installed.main()
+                        assert result == 0
 
     def test_install_failure_returns_2(self):
         """Should exit 2 when installation fails."""
         with patch.object(ensure_installed, "_get_installed_version", return_value=None):
-            with patch.object(ensure_installed, "_python_bin") as mock_bin:
-                mock_bin.return_value = Path("/fake/bin/python")
-                with patch.object(Path, "exists", return_value=True):
-                    with patch.object(ensure_installed, "_install_pr_agent", return_value=False):
-                        with patch("sys.argv", ["ensure_installed.py"]):
-                            assert ensure_installed.main() == 2
+            with patch.object(ensure_installed, "_create_venv", return_value=True):
+                with patch.object(ensure_installed, "_install_pr_agent", return_value=False):
+                    with patch("sys.argv", ["ensure_installed.py"]):
+                        assert ensure_installed.main() == 2

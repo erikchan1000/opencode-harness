@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Run pr-agent review and capture output.
 
-Invokes pr-agent CLI in local-stdout mode (publish_output=false), merging
-the default template config with any repo-local .pr_agent.toml overrides
-and CLI arguments.
+Invokes pr-agent CLI in local-stdout mode (publish_output=false) with
+inline config overrides via CLI arguments.
 
 Usage:
     # Review a remote PR
@@ -193,6 +192,9 @@ def _get_local_pr_url() -> str | None:
     """Derive a PR URL from the current branch's upstream, or return None."""
     import shutil
 
+    if not shutil.which("git"):
+        return None
+
     try:
         # Get the remote URL
         result = subprocess.run(
@@ -314,10 +316,9 @@ def main() -> int:
         str(python), "-m", "pr_agent.cli",
         f"--pr_url={pr_url}",
         args.command,
-        f"--config.model={model}",
-        "--config.publish_output=false",
-        "--config.verbosity_level=2",
-        f"--config.fallback_models=[\"{model}\"]",
+            f"--config.model={model}",
+            "--config.publish_output=false",
+            f"--config.fallback_models=[\"{model}\"]",
         "--pr_reviewer.require_score_review=true",
         "--pr_reviewer.require_tests_review=true",
         "--pr_reviewer.require_security_review=true",
