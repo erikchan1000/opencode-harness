@@ -167,6 +167,33 @@ def main() -> int:
     installed_version = _get_installed_version()
 
     if installed_version:
+        # Check for version mismatch
+        if args.version and installed_version != args.version:
+            if args.check_only:
+                result = {
+                    "installed": True,
+                    "version": installed_version,
+                    "requested_version": args.version,
+                    "version_mismatch": True,
+                    "venv_path": str(VENV_DIR),
+                }
+                if args.json:
+                    print(json.dumps(result))
+                else:
+                    print(
+                        f"pr-agent {installed_version} is installed but "
+                        f"{args.version} was requested (venv: {VENV_DIR})"
+                    )
+                return 0
+            # Upgrade to requested version
+            print(
+                f"Upgrading pr-agent {installed_version} -> {args.version}...",
+                file=sys.stderr,
+            )
+            if not _install_pr_agent(args.version):
+                return 2
+            installed_version = _get_installed_version()
+
         result = {
             "installed": True,
             "version": installed_version,
@@ -193,9 +220,9 @@ def main() -> int:
     # Install
     print(f"Installing pr-agent {args.version} into {VENV_DIR}...", file=sys.stderr)
 
-    if not _python_bin().exists():
-        if not _create_venv():
-            return 2
+    # Always (re)create the venv to handle stale/corrupted state
+    if not _create_venv():
+        return 2
 
     if not _install_pr_agent(args.version):
         return 2

@@ -191,6 +191,8 @@ def _resolve_api_key(model: str) -> tuple[str, str] | None:
 
 def _get_local_pr_url() -> str | None:
     """Derive a PR URL from the current branch's upstream, or return None."""
+    import shutil
+
     try:
         # Get the remote URL
         result = subprocess.run(
@@ -305,7 +307,9 @@ def main() -> int:
             pr_url = "https://github.com/local/repo/pull/0"
 
     # Build CLI command with inline config overrides.
-    # PR-Agent reads these as --section.key=value via dynaconf.
+    # PR-Agent CLI reads --section.key=value via dynaconf. The format
+    # --pr_reviewer.key=value (without config. prefix) is the documented
+    # format: see https://docs.pr-agent.ai/usage-guide/configuration_options/
     cmd = [
         str(python), "-m", "pr_agent.cli",
         f"--pr_url={pr_url}",
