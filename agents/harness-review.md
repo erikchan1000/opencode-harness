@@ -54,30 +54,35 @@ The parent passes you:
 ## Workflow
 
 1. Read the impl prompt to understand what was changed and why.
-2. Run the pr-review skill's `ensure_installed.py` to verify PR-Agent is
-   available:
+2. Locate the pr-review scripts directory. Check these paths in order
+   and use the first that exists:
+   - `~/.config/opencode/skills/pr-review/scripts/`
+   - `${CLAUDE_SKILL_DIR}/../pr-review/scripts/` (fallback)
+
+   Set `PR_REVIEW_SCRIPTS` to the resolved path for subsequent steps.
+3. Run `ensure_installed.py` to verify PR-Agent is available:
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../pr-review/scripts/ensure_installed.py"
+   python "$PR_REVIEW_SCRIPTS/ensure_installed.py"
    ```
-3. Run the review against the local branch diff:
+4. Run the review against the local branch diff:
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../pr-review/scripts/run_review.py" \
+   python "$PR_REVIEW_SCRIPTS/run_review.py" \
      --local \
      --command review \
      --extra-instructions "<any domain-specific focus from parent>"
    ```
-4. Parse the output into structured findings:
+5. Parse the output into structured findings:
    ```bash
-   python "${CLAUDE_SKILL_DIR}/../pr-review/scripts/parse_output.py" --format json
+   python "$PR_REVIEW_SCRIPTS/parse_output.py" --format json
    ```
-5. Triage each finding:
+6. Triage each finding:
    - **blocking**: Must fix before proceeding to test. Security bugs,
      correctness errors, data loss risks.
    - **advisory**: Worth noting but does not block. Style, naming,
      minor improvements.
    - **false_positive**: PR-Agent flagged something that is intentional
      or already handled. Note the reason.
-6. Assemble the verdict.
+7. Assemble the verdict.
 
 ## Verdict rules
 

@@ -144,30 +144,22 @@ class TestBuildConfig:
     """Tests for _build_config()."""
 
     def test_basic_config_structure(self):
-        """Should produce valid TOML-like config (secrets passed via env, not in file)."""
+        """Should produce valid TOML-like config."""
         config = run_review._build_config(
-            model="anthropic/claude-sonnet-4-20250514",
-            api_key_info=("anthropic", "sk-test"),
-            command="review",
+            model="anthropic/claude-opus-4-6",
             extra_instructions="",
             local_mode=False,
-            repo_config=None,
         )
         assert '[config]' in config
-        assert 'model = "anthropic/claude-sonnet-4-20250514"' in config
+        assert 'model = "anthropic/claude-opus-4-6"' in config
         assert 'publish_output = false' in config
-        # Secrets are passed as env vars, NOT written to config file
-        assert 'sk-test' not in config
 
     def test_local_mode_sets_local_provider(self):
         """Should set git_provider to local when --local."""
         config = run_review._build_config(
             model="gpt-4o",
-            api_key_info=("openai", "sk-test"),
-            command="review",
             extra_instructions="",
             local_mode=True,
-            repo_config=None,
         )
         assert 'git_provider = "local"' in config
 
@@ -175,26 +167,20 @@ class TestBuildConfig:
         """Should include extra_instructions in reviewer config."""
         config = run_review._build_config(
             model="gpt-4o",
-            api_key_info=("openai", "sk-test"),
-            command="review",
             extra_instructions="Focus on HIPAA compliance",
             local_mode=False,
-            repo_config=None,
         )
         assert "Focus on HIPAA compliance" in config
 
     def test_no_secrets_in_config_file(self):
-        """Secrets should NOT appear in the config file (passed via env vars)."""
+        """Secrets should NOT appear in the config file."""
         config = run_review._build_config(
             model="gpt-4o",
-            api_key_info=("openai", "sk-openai-test"),
-            command="review",
             extra_instructions="",
             local_mode=False,
-            repo_config=None,
         )
-        assert "sk-openai-test" not in config
         assert "[openai]" not in config
+        assert "[anthropic]" not in config
 
 
 class TestMainValidation:

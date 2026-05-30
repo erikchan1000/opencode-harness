@@ -119,67 +119,78 @@ def _read_secrets_toml() -> dict[str, dict[str, str]]:
         return {}
 
 
+_PROVIDER_ENV_VARS = [
+    ("anthropic", "ANTHROPIC_KEY"),
+    ("openai", "OPENAI_KEY"),
+    ("groq", "GROQ_API_KEY"),
+    ("deepseek", "DEEPSEEK_KEY"),
+]
+
+
+def _model_provider_hint(model: str) -> str | None:
+    """Return the preferred provider name based on the model string."""
+    model_lower = model.lower()
+    if "anthropic" in model_lower or "claude" in model_lower:
+        return "anthropic"
+    if "gpt" in model_lower or "openai" in model_lower:
+        return "openai"
+    if "groq" in model_lower:
+        return "groq"
+    if "deepseek" in model_lower:
+        return "deepseek"
+    return None
+
+
 def _resolve_api_key(model: str) -> tuple[str, str] | None:
     """Resolve the API key for the given model.
 
     Resolution order:
-      1. Environment variables (ANTHROPIC_KEY, OPENAI_KEY, etc.)
-      2. ~/.pr_agent_secrets.toml
+      1. Environment variable matching the model's provider
+      2. Any available environment variable
+      3. Secrets file entry matching the model's provider
+      4. Any available secrets file entry
 
     Returns (provider_name, key_value) or None if not found.
     """
-    model_lower = model.lower()
+    hint = _model_provider_hint(model)
 
-    # --- 1. Environment variables ---
-    if "anthropic" in model_lower or "claude" in model_lower:
-        key = os.environ.get("ANTHROPIC_KEY")
-        if key:
-            return ("anthropic", key)
+    # --- 1. Env var for the model's provider ---
+    if hint:
+        for provider, env_var in _PROVIDER_ENV_VARS:
+            if provider == hint:
+                key = os.environ.get(env_var)
+                if key:
+                    return (provider, key)
 
-    key = os.environ.get("OPENAI_KEY")
-    if key:
-        return ("openai", key)
-
-    for env_var, provider in [
-        ("ANTHROPIC_KEY", "anthropic"),
-        ("OPENAI_KEY", "openai"),
-        ("GROQ_API_KEY", "groq"),
-        ("DEEPSEEK_KEY", "deepseek"),
-    ]:
+    # --- 2. Any env var ---
+    for provider, env_var in _PROVIDER_ENV_VARS:
         key = os.environ.get(env_var)
         if key:
             return (provider, key)
 
-    # --- 2. Secrets file ---
+    # --- 3. Secrets file for the model's provider ---
     secrets = _read_secrets_toml()
 
-    if "anthropic" in model_lower or "claude" in model_lower:
-        key = secrets.get("anthropic", {}).get("key")
+    if hint:
+        key = secrets.get(hint, {}).get("key")
         if key:
-            return ("anthropic", key)
+            return (hint, key)
 
-    key = secrets.get("openai", {}).get("key")
-    if key:
-        return ("openai", key)
-
-    for provider_name in ("anthropic", "openai", "groq", "deepseek"):
-        key = secrets.get(provider_name, {}).get("key")
+    # --- 4. Any secrets file entry ---
+    for provider, _ in _PROVIDER_ENV_VARS:
+        key = secrets.get(provider, {}).get("key")
         if key:
-            return (provider_name, key)
+            return (provider, key)
 
     return None
 
 
 def _build_config(
     model: str,
-    api_key_info: tuple[str, str],
-    command: str,
     extra_instructions: str,
     local_mode: bool,
-    repo_config: Path | None,
 ) -> str:
-    """Build a merged .pr_agent.toml config string."""
-    provider, key = api_key_info
+    """Build a .pr_agent.toml config string (non-secret settings only)."""
 
     lines = [
         "[config]",
@@ -352,11 +363,8 @@ def main() -> int:
     # Build config
     config_content = _build_config(
         model=model,
-        api_key_info=api_key_info,
-        command=args.command,
         extra_instructions=args.extra_instructions,
         local_mode=args.local,
-        repo_config=None,
     )
 
     # Write temp config and run pr-agent
