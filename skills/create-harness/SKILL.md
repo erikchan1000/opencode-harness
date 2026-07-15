@@ -22,7 +22,7 @@ have tests behind them.
 
 This skill provides a methodology and file templates to build one. The
 harness comprises OpenCode subagent definitions (in
-`~/.config/opencode/agent/harness-*.md`) plus an orchestration loop the
+`~/.config/opencode/agents/harness-*.md`) plus an orchestration loop the
 parent agent runs using the Task tool.
 
 ## When to use this skill
@@ -42,8 +42,8 @@ Do not bother with a harness for:
 
 ## The standard roster
 
-A complete harness has six roles. Cut the ones not needed; never add a
-seventh without a strong reason — diluting roles is how harnesses go bad.
+A complete harness has seven roles. Cut the ones not needed; never add an
+eighth without a strong reason — diluting roles is how harnesses go bad.
 
 | Role | `subagent_type` | Tool restrictions | Output |
 |------|-----------------|-------------------|--------|
@@ -51,11 +51,28 @@ seventh without a strong reason — diluting roles is how harnesses go bad.
 | **Prompt author** | `harness-prompt` | — | One tailored implementation-prompt `.md` per finding |
 | **Implementation** | `harness-impl` | — | A diff that compiles + one-line completion log |
 | **Debug** | `harness-debug` | `edit: false` | Root-cause note + recommended patch (no edits) |
+| **Review** | `harness-review` | `edit: false` | PR-Agent findings + PASS/NEEDS_FIX/BLOCKED verdict |
 | **Unit test** | `harness-test` | — | New / amended tests + green test-run log |
 | **Recovery** | `harness-recovery` | `edit: false` | A revised prompt for whichever role failed |
 
 All harness agents have `task: false` (no recursive sub-spawning) and
 `todowrite: false` (parent owns the task list).
+
+### Model assignments
+
+The roles run on a deliberate two-tier model split, set via `model:`
+(and `variant:`) in each agent's frontmatter:
+
+| Role(s) | Model | Rationale |
+|---------|-------|-----------|
+| Implementation (`harness-impl`) | `anthropic/claude-sonnet-4-6` (switched from opus-4-8-fast: zero rate-limit quota) | Volume work from a self-contained prompt; speed and cost matter more than peak judgment |
+| Review, Debug, Recovery | `anthropic/claude-opus-4-8` (switched from claude-fable-5: that model errored with empty output) | High-judgment gates: catching subtle bugs, root-cause analysis, and prompt rewriting after failures |
+| Research, Prompt, Test | (inherits session default) | — |
+| Orchestration (parent agent) | Run the parent session on `anthropic/claude-fable-5` | The orchestrator makes the retry/defer/escalate decisions; use the strongest model |
+
+When updating model assignments, edit the frontmatter of the
+corresponding `~/.config/opencode/agents/harness-*.md` files and keep
+this table in sync.
 
 The **recovery** role is the one most teams skip. It is what turns "the
 implementation agent timed out" from a dead end into "feed the truncated
@@ -87,8 +104,12 @@ Harness phases:
         from the findings metadata.
 - [ ] Phase 3 — Execute. For each wave (in order):
         (a) Generate prompts for this wave's findings (parallel).
-        (b) Run finding-pipelines IN PARALLEL: impl → debug → test.
-        (c) On failure: warm retry (resume task_id) → cold retry
+        (b) Run impl pipelines IN PARALLEL: impl → debug (if needed).
+        (c) REVIEW GATE (mandatory): run harness-review for each finding.
+            If verdict is NEEDS_FIX, route findings back to impl.
+        (d) TEST GATE (mandatory): run harness-test for each finding.
+            A finding is NOT done until tests pass.
+        (e) On failure: warm retry (resume task_id) → cold retry
             (recovery agent + fresh impl).
         Wait for the whole wave to complete before the next wave.
 - [ ] Phase 4 — Wrap. Aggregate completion logs into report.md.
@@ -209,9 +230,39 @@ For each wave:
       - [ ] Debug: invoke Task(subagent_type: "harness-debug")
               only if the impl output shows a regression or unexpected behaviour.
               Route the debug note back to impl if a re-fix is needed.
-      - [ ] Unit test: invoke Task(subagent_type: "harness-test")
-              Write tests, run them, attach the green log.
-      - [ ] Mark F0N done in findings.md; append to report.md.
+
+  Step 3c — REVIEW GATE (mandatory, parallel per finding):
+    CRITICAL: Run PR-Agent review BEFORE writing tests. Do NOT skip.
+    The review gate catches security issues, correctness bugs, and
+    API contract mismatches that tests alone won't surface.
+
+    For each F0N in this wave (PARALLEL):
+      - [ ] Invoke Task(subagent_type: "harness-review",
+                        prompt: "Finding: F0N — <title>
+                                 Prompt file: plan/prompts/F0N-<slug>.md
+                                 Changed files: <list from impl output>
+                                 Extra instructions: <domain focus if any>")
+      - [ ] If verdict is NEEDS_FIX: route blocking findings back to
+              impl agent (warm retry with findings as context).
+      - [ ] If verdict is PASS: proceed to test gate.
+      - [ ] If verdict is BLOCKED: escalate to orchestrator (missing
+              API key, PR-Agent crash, etc.)
+
+  Step 3d — TEST GATE (mandatory, parallel per finding):
+    CRITICAL: A finding is NOT done until tests pass. Do NOT skip this step.
+    Do NOT mark a finding complete after impl alone — the test gate is what
+    separates "code was written" from "code is correct."
+
+    For each F0N in this wave (PARALLEL):
+      - [ ] Invoke Task(subagent_type: "harness-test",
+                        prompt: "Finding: F0N — <title>
+                                 Changed files: <list from impl output>
+                                 Write tests that verify the implementation
+                                 and run them. Attach the green test log.")
+      - [ ] If tests FAIL: route failure back to impl agent (warm retry)
+              or debug agent for root-cause analysis.
+      - [ ] Only after tests PASS: mark F0N done in findings.md;
+              append to report.md.
 
   Barrier: wait for ALL F0N in this wave to reach DONE or BLOCKED.
   Move to the next wave.
@@ -233,6 +284,58 @@ is fundamentally stuck, not just timed out.
 budget, the orchestrator decides whether to (a) defer just that finding
 and proceed to the next wave with its dependents also deferred, or
 (b) abort for human input. Default is (a).
+
+### Review gate enforcement
+
+The review gate (Step 3c) uses `harness-review` which runs **PR-Agent**
+for AI-powered code review. Key operational requirements:
+
+1. **PR-Agent requires a real GitHub PR URL.** Local dummy URLs
+   (`https://github.com/local/repo/pull/0`) do not work — the GitHub
+   API rejects them. The orchestrator must:
+   - Push the feature branch to origin
+   - Create a draft PR via `gh pr create --draft`
+   - Pass the real PR URL to the review script
+   - This can be done once per wave (after all impl agents finish),
+     not per-finding
+
+2. **Review runs after all impl agents in the wave complete**, not
+   per-finding. PR-Agent reviews the full diff, which is more useful
+   than reviewing individual findings in isolation.
+
+3. **If PR-Agent is BLOCKED** (missing API key, network error, etc.),
+   the orchestrator should fall back to a manual review using the
+   `general` subagent type with explicit security-focused instructions.
+
+4. **Blocking findings** from the review must be routed back to impl
+   agents before proceeding to the test gate. Advisory findings are
+   logged but do not block.
+
+### Test gate enforcement
+
+The test gate (Step 3d) is **mandatory** for every finding pipeline.
+The orchestrator MUST NOT:
+
+- Mark a finding as "done" without a green test run
+- Skip the test step to "save time" — this creates false confidence
+- Move to the next wave while any finding in the current wave has
+  impl done but tests not run
+- Treat build/typecheck success alone as sufficient verification
+
+The test agent should write tests that:
+
+1. **Would fail on pre-fix code** (proves the impl actually changed
+   behaviour)
+2. **Pass on post-fix code** (proves the impl is correct)
+3. **Cover edge cases** mentioned in the finding's reproduction steps
+
+If the project has no test framework set up, the test agent should
+set one up as part of its work (e.g., vitest, pytest, flutter test).
+
+If tests cannot be written for a finding (e.g., pure infrastructure
+like Terraform), the test agent should document why and perform a
+manual verification checklist instead. This exception must be noted
+in the finding's report entry.
 
 ### Phase 4 — Wrap
 
@@ -317,13 +420,14 @@ The skill ships five templates — copy and fill in:
 ## Subagent definitions
 
 The skill relies on six global subagent definitions installed at
-`~/.config/opencode/agent/harness-*.md`. Invoke them via the Task tool
+`~/.config/opencode/agents/harness-*.md`. Invoke them via the Task tool
 with the corresponding `subagent_type`:
 
 - `harness-research` — read-only codebase exploration
 - `harness-prompt` — per-finding prompt authoring (one finding at a time)
 - `harness-impl` — focused implementation from a single prompt
 - `harness-debug` — root-cause analysis without edits
+- `harness-review` — PR-Agent code review gate (PASS/NEEDS_FIX/BLOCKED)
 - `harness-test` — test writing + execution gate
 - `harness-recovery` — prompt rewriting for cold retries
 
@@ -366,7 +470,10 @@ See `${CLAUDE_SKILL_DIR}/examples/` for worked examples:
    unactionable; the DAG builder cannot schedule it AND the prompt-
    author has nothing to anchor the impl prompt against.
 9. **Shipping the harness output without running the tests.** The
-   unit-test phase is the gate, not optional polish.
+   test phase (Step 3c) is a MANDATORY gate, not optional polish.
+   Every finding must have a green test run before it is marked done.
+   "It compiles" is not "it works." If you find yourself skipping
+   tests to move faster, you are building a house of cards.
 
 ## Closing checklist
 
@@ -383,6 +490,8 @@ Before declaring the harness done:
       invocation that ran
 - [ ] `plan/report.md` summarises completions and any deferred items
 - [ ] CHANGELOG / ADRs updated per repo conventions
+- [ ] **Every finding has a test run logged** (green test output or
+      documented exception for untestable findings like Terraform)
 - [ ] All tests pass; lints clean
 - [ ] Deferred findings are listed in the backlog with a one-line
       rationale

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Import the module under test
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pr-review" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "pr-review" / "scripts"))
 import ensure_installed
 
 

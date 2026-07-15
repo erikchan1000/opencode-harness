@@ -1,0 +1,59 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permission": "allow",
+  "instructions": ["/Users/erikchan/.config/opencode/AGENTS.md"],
+  // Tracks AI coding activity (files, lines, time) to your WakaTime
+  // dashboard. Requires an API key in ~/.wakatime.cfg. The plugin
+  // auto-downloads wakatime-cli on first run.
+  "plugin": ["opencode-wakatime"],
+  // Strength-based model routing ("fusion"): the primary `build` agent
+  // orchestrates and delegates each task to the model best suited for it.
+  // Specialist subagents (coder, deep-reasoner) keep their prompts in
+  // agent/*.md; their model overrides live below so all routing is in one
+  // place. Routing rules are documented in AGENTS.md.
+  "agent": {
+    // Orchestrator + design + planning. Strongest reasoning model so it
+    // makes good routing decisions and handles architecture itself.
+    "build": { "model": "anthropic/claude-opus-4-8" },
+    // Balanced, lower-cost workhorse for multi-step general tasks.
+    "general": { "model": "anthropic/claude-sonnet-4-6" },
+    // Fast, cheap model for codebase search and navigation.
+    "explore": { "model": "anthropic/claude-haiku-4-5" },
+    // Implementation specialist; prompt + rules in agent/coder.md. Moved off
+    // openai/gpt-5.3-codex-spark after the OpenAI OAuth credential expired.
+    "coder": { "model": "anthropic/claude-sonnet-4-6" },
+    // Deep-reasoning / debugging specialist; prompt in agent/deep-reasoner.md.
+    // Moved off openai/gpt-5.5-pro for the same reason.
+    "deep-reasoner": { "model": "anthropic/claude-opus-4-8" }
+  },
+  "mcp": {
+    "cloudflare": {
+      "type": "remote",
+      "url": "https://mcp.cloudflare.com/mcp"
+    },
+    // Design reference: 600k+ real product screens for UI/UX pattern review.
+    // Remote, OAuth-authenticated (no API key) — requires a paid Mobbin
+    // plan. On first use opencode opens a browser to sign in / authorize.
+    // Docs: https://docs.mobbin.com/mcp/clients/overview
+    "mobbin": {
+      "type": "remote",
+      "url": "https://api.mobbin.com/mcp"
+    },
+    // Design source-of-truth: Framelink Figma MCP. Reads Figma files
+    // (component specs, tokens, spacing) so we can pull the Material 3
+    // Design Kit + our own frames into code. Free — needs a free Figma
+    // personal-access token exported as FIGMA_API_KEY before launch.
+    // Get a token: Figma → Settings → Security → Personal access tokens.
+    "figma": {
+      "type": "local",
+      "command": ["npx", "-y", "figma-developer-mcp", "--stdio"],
+      "env": { "FIGMA_API_KEY": "{env:FIGMA_API_KEY}" }
+    },
+    // Up-to-date library docs (Flutter / Material 3 widget APIs, etc.) so
+    // we reference real, current components instead of guessing. Free.
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp"]
+    }
+  }
+}

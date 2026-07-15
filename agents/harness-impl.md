@@ -26,6 +26,7 @@ description: >-
     </example>
 
 mode: subagent
+model: anthropic/claude-sonnet-4-6
 tools:
   task: false
   todowrite: false

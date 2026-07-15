@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 # Add scripts to path for direct imports in tests
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "pr-review" / "scripts"
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "skills" / "pr-review" / "scripts"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 

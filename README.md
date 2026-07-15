@@ -1,10 +1,53 @@
 # opencode-harness
 
-A multi-subagent orchestration system for [OpenCode](https://opencode.ai) that turns complex, ambiguous tasks into structured research, parallel implementation, and verified fixes.
+The source of truth for my [OpenCode](https://opencode.ai) setup: a collection of
+**skills**, **agents**, and **config** that are symlinked into `~/.config/opencode/`
+by [`install.sh`](install.sh). Edit here, and the changes are live everywhere.
 
-## What it does
+The flagship is the **create-harness** skill — a multi-subagent orchestration
+system that turns complex, ambiguous tasks into structured research, parallel
+implementation, and verified fixes — but the repo now tracks the whole toolbox.
 
-A **harness** is a team of six specialized AI subagents that work together through a five-phase loop:
+## What's inside
+
+### Skills (`skills/`)
+
+| Skill | Purpose |
+|-------|---------|
+| [`create-harness`](skills/create-harness) | Multi-subagent orchestration: research → plan → parallel implement → verify (flagship, see below) |
+| [`pr-review`](skills/pr-review) | AI-powered code review via [PR-Agent](https://github.com/qodo-ai/pr-agent), runs locally (BYOK) |
+| [`caveman`](skills/caveman) | Ultra-compressed communication mode; cuts token usage ~75% while keeping technical accuracy |
+| [`fhir-ehr-mapping-playbook`](skills/fhir-ehr-mapping-playbook) | Canonical-to-FHIR and vendor EHR mapping/sync design & validation |
+| [`flutter-taste-skill`](skills/flutter-taste-skill) | Give AI-generated Flutter UI good taste (bento grids, glassmorphism, anti-slop rules) |
+| [`hipaa-security-checklist`](skills/hipaa-security-checklist) | Review PHI handling, access controls, and HIPAA-aligned safeguards |
+| [`home-health-oasis-playbook`](skills/home-health-oasis-playbook) | OASIS, M1800, and GG charting logic for home-health AI scribe workflows |
+| [`mobile-ui-refactor`](skills/mobile-ui-refactor) | Refactor/overhaul mobile UI (Material 3, dark-mode-first, motion, polish) |
+| [`quant-strategy-research`](skills/quant-strategy-research) | Quant trading-strategy research methodology (entry/exit signals, anti-overfitting validation) |
+| [`skill-creator`](skills/skill-creator) | Guide for authoring and updating effective skills |
+| [`skillsmp-discovery`](skills/skillsmp-discovery) | Find, browse, and install community skills from [SkillsMP](https://skillsmp.com) |
+
+### Agents (`agents/`)
+
+The seven `harness-*` agents power the create-harness flagship (detailed in the
+table further down). The rest are general-purpose specialists:
+
+| Agent | Purpose |
+|-------|---------|
+| [`coder`](agents/coder.md) | Implementation specialist — writes/edits/refactors from a clear spec |
+| [`deep-reasoner`](agents/deep-reasoner.md) | Hard-reasoning & debugging — root cause, algorithms, concurrency, tradeoffs |
+| [`ehr-fhir-sync-architect`](agents/ehr-fhir-sync-architect.md) | Design/implement/review EHR/FHIR integration for home-health charting |
+| [`hipaa-privacy-reviewer`](agents/hipaa-privacy-reviewer.md) | Focused HIPAA/privacy/security review of PHI-handling code |
+| [`home-health-scribe-architect`](agents/home-health-scribe-architect.md) | Architecture for AI scribe systems in home-health workflows |
+| [`scribe-test-engineer`](agents/scribe-test-engineer.md) | Unit/integration tests for AI scribe features with edge-case coverage |
+
+### Config
+
+- [`AGENTS.md`](AGENTS.md) — global engineering principles + strength-based model routing.
+- [`opencode.jsonc`](opencode.jsonc) — model routing, MCP servers, and plugins.
+
+## Flagship: the create-harness skill
+
+A **harness** is a team of seven specialized AI subagents that work together through a five-phase loop:
 
 1. **Scope** -- define the objective, boundaries, and done criteria
 2. **Research** -- parallel codebase exploration producing structured findings
@@ -76,42 +119,42 @@ The system handles the hard parts of multi-agent orchestration: context isolatio
 opencode-harness/
 ├── README.md
 ├── LICENSE
-├── install.sh              # Symlink into ~/.config/opencode/
+├── AGENTS.md               # Engineering principles + model routing (→ config)
+├── opencode.jsonc          # Model routing, MCP servers, plugins (→ config)
+├── install.sh              # Symlink skills/agents/config into ~/.config/opencode/
 ├── pyproject.toml          # Dev deps (pytest) for running tests
 │
-├── skill/                  # create-harness skill (orchestration methodology)
-│   ├── SKILL.md            # Master orchestration methodology (388 lines)
-│   ├── templates/
-│   │   ├── objective.md    # Phase 0 — scope definition
-│   │   ├── finding.md      # Phase 1 — per-issue research output
-│   │   ├── impl-prompt.md  # Phase 3a — per-finding implementation prompt
-│   │   ├── pipelines.md    # Phase 2 — wave plan format reference
-│   │   └── scratchpad.md   # Every subagent's working-memory file
-│   ├── scripts/
-│   │   └── build_pipelines.py  # Deterministic DAG builder (~490 lines)
-│   └── examples/
-│       ├── mobile-bugs.md  # Worked example: Flutter recording pipeline
-│       └── api-perf.md     # Worked example: REST backend latency
+├── skills/                 # All skills — each dir symlinked into ~/.config/opencode/skills/
+│   ├── create-harness/     # Flagship orchestration methodology
+│   │   ├── SKILL.md
+│   │   ├── templates/      # objective / finding / impl-prompt / pipelines / scratchpad
+│   │   ├── scripts/build_pipelines.py   # Deterministic DAG builder
+│   │   └── examples/       # mobile-bugs.md, api-perf.md
+│   ├── pr-review/          # AI code review via PR-Agent
+│   │   ├── SKILL.md
+│   │   ├── scripts/        # ensure_installed.py, run_review.py, parse_output.py
+│   │   └── templates/pr_agent.toml
+│   ├── caveman/
+│   ├── fhir-ehr-mapping-playbook/
+│   ├── flutter-taste-skill/
+│   ├── hipaa-security-checklist/
+│   ├── home-health-oasis-playbook/
+│   ├── mobile-ui-refactor/
+│   ├── quant-strategy-research/
+│   ├── skill-creator/
+│   └── skillsmp-discovery/
 │
-├── pr-review/              # pr-review skill (AI code review via PR-Agent)
-│   ├── SKILL.md            # Skill definition + trigger patterns
-│   ├── scripts/
-│   │   ├── ensure_installed.py  # Check/install pr-agent in isolated venv
-│   │   ├── run_review.py        # Invoke pr-agent CLI, capture output
-│   │   └── parse_output.py      # Parse markdown output → structured findings
-│   └── templates/
-│       └── pr_agent.toml        # Default review config template
+├── agents/                 # All subagents — each file symlinked into ~/.config/opencode/agents/
+│   ├── harness-research.md   harness-prompt.md   harness-impl.md
+│   ├── harness-review.md     harness-debug.md    harness-test.md
+│   ├── harness-recovery.md
+│   ├── coder.md              deep-reasoner.md
+│   ├── ehr-fhir-sync-architect.md
+│   ├── hipaa-privacy-reviewer.md
+│   ├── home-health-scribe-architect.md
+│   └── scribe-test-engineer.md
 │
-├── agents/                 # Subagent definitions (installed individually)
-│   ├── harness-research.md
-│   ├── harness-prompt.md
-│   ├── harness-impl.md
-│   ├── harness-review.md   # Code review gate (between impl and test)
-│   ├── harness-debug.md
-│   ├── harness-test.md
-│   └── harness-recovery.md
-│
-└── tests/                  # pytest test suite
+└── tests/                  # pytest suite for the pr-review scripts
     ├── conftest.py
     ├── test_ensure_installed.py
     ├── test_run_review.py
@@ -129,22 +172,21 @@ opencode-harness/
 ./install.sh
 ```
 
-This creates symlinks from your OpenCode config to the repo, so updates are picked up automatically.
+This symlinks **everything** into `~/.config/opencode/`, so the repo stays the
+single source of truth and edits go live immediately:
 
-### Manual install (copy)
+- every dir in `skills/` → `~/.config/opencode/skills/<name>`
+- every file in `agents/` → `~/.config/opencode/agents/<name>.md`
+- `AGENTS.md` and `opencode.jsonc` → `~/.config/opencode/`
 
-```bash
-# Install the skills
-cp -r skill/ ~/.config/opencode/skills/create-harness/
-cp -r pr-review/ ~/.config/opencode/skills/pr-review/
-
-# Install the agent definitions
-cp agents/harness-*.md ~/.config/opencode/agent/
-```
+The script is idempotent (re-run after pulling updates). If a target already
+exists as a real file/dir, it is backed up to `<target>.bak-<timestamp>` before
+the symlink is created; existing symlinks are replaced in place.
 
 ### Verify
 
-After installing, both skills appear in OpenCode's available skills list, and the seven `harness-*` agent types become available to the Task tool.
+After installing, all skills appear in OpenCode's available skills list, and the
+`harness-*` and specialist agent types become available to the Task tool.
 
 ## Usage
 
@@ -217,7 +259,7 @@ The review agent produces a verdict: `PASS` (proceed to test),
 The `build_pipelines.py` script is the deterministic planner:
 
 ```bash
-python skill/scripts/build_pipelines.py \
+python skills/create-harness/scripts/build_pipelines.py \
   --findings plan/findings.md \
   --output   plan/pipelines.md \
   --title    "Auth module bugs"

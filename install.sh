@@ -1,69 +1,71 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# install.sh — Install opencode-harness into ~/.config/opencode/
+# install.sh — Install this repo's skills, agents, and config into
+# ~/.config/opencode/ as symlinks, so the repo stays the single source
+# of truth. Run again after pulling updates — symlinks are idempotent.
 #
-# Creates symlinks so the repo stays the source of truth.
-# Run again after pulling updates — symlinks are idempotent.
+# Layout created in ~/.config/opencode/:
+#   skills/<name>   -> <repo>/skills/<name>       (every dir under skills/)
+#   agents/<name>.md -> <repo>/agents/<name>.md   (every file under agents/)
+#   AGENTS.md       -> <repo>/AGENTS.md
+#   opencode.jsonc  -> <repo>/opencode.jsonc
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SKILLS_DIR="$HOME/.config/opencode/skills"
-AGENT_DIR="$HOME/.config/opencode/agent"
+CONFIG_DIR="$HOME/.config/opencode"
+SKILLS_DIR="$CONFIG_DIR/skills"
+AGENT_DIR="$CONFIG_DIR/agents"
 
-echo "Installing opencode-harness from $SCRIPT_DIR"
+TS="$(date +%Y%m%d-%H%M%S)"
+
+echo "Installing opencode config from $SCRIPT_DIR"
 echo ""
 
-# --- Skills ---
-mkdir -p "$SKILLS_DIR"
-
-# create-harness skill
-_install_skill() {
-    local name="$1"
-    local source="$2"
-    local target="$SKILLS_DIR/$name"
+# link SOURCE TARGET — create TARGET as a symlink to SOURCE.
+#   - existing symlink            -> replaced (idempotent)
+#   - existing real file/dir      -> backed up to TARGET.bak-<timestamp>
+link() {
+    local source="$1"
+    local target="$2"
 
     if [ -L "$target" ]; then
-        echo "  Removing existing symlink: $target"
         rm "$target"
-    elif [ -d "$target" ]; then
-        echo "  WARNING: $target exists and is not a symlink."
-        echo "  Back it up and remove it, then re-run this script."
-        echo "  Skipping $name skill installation."
-        return
+    elif [ -e "$target" ]; then
+        echo "  Backing up existing $target -> $target.bak-$TS"
+        mv "$target" "$target.bak-$TS"
     fi
 
     ln -s "$source" "$target"
-    echo "  Skill: $target -> $source"
+    echo "  $target -> $source"
 }
 
-_install_skill "create-harness" "$SCRIPT_DIR/skill"
-_install_skill "pr-review"      "$SCRIPT_DIR/pr-review"
+# --- Skills ---
+mkdir -p "$SKILLS_DIR"
+skill_count=0
+for skill_path in "$SCRIPT_DIR"/skills/*/; do
+    name="$(basename "$skill_path")"
+    link "${skill_path%/}" "$SKILLS_DIR/$name"
+    skill_count=$((skill_count + 1))
+done
 
 # --- Agents ---
 mkdir -p "$AGENT_DIR"
-
-for agent_file in "$SCRIPT_DIR"/agents/harness-*.md; do
+agent_count=0
+for agent_file in "$SCRIPT_DIR"/agents/*.md; do
     name="$(basename "$agent_file")"
-    target="$AGENT_DIR/$name"
-
-    if [ -L "$target" ]; then
-        rm "$target"
-    elif [ -f "$target" ]; then
-        echo "  WARNING: $target exists and is not a symlink. Skipping."
-        continue
-    fi
-
-    ln -s "$agent_file" "$target"
-    echo "  Agent: $target -> $agent_file"
+    link "$agent_file" "$AGENT_DIR/$name"
+    agent_count=$((agent_count + 1))
 done
+
+# --- Top-level config files ---
+link "$SCRIPT_DIR/AGENTS.md"      "$CONFIG_DIR/AGENTS.md"
+link "$SCRIPT_DIR/opencode.jsonc" "$CONFIG_DIR/opencode.jsonc"
 
 echo ""
 echo "Done. Installed:"
-echo "  - 2 skills (create-harness, pr-review)"
-echo "  - 7 agents (harness-research, harness-prompt, harness-impl,"
-echo "              harness-review, harness-debug, harness-test,"
-echo "              harness-recovery)"
+echo "  - $skill_count skills  -> $SKILLS_DIR/"
+echo "  - $agent_count agents  -> $AGENT_DIR/"
+echo "  - AGENTS.md, opencode.jsonc -> $CONFIG_DIR/"
 echo ""
-echo "Verify: restart OpenCode and check that 'create-harness' and"
-echo "'pr-review' appear in the available skills list."
+echo "Verify: restart OpenCode and check the available skills list."

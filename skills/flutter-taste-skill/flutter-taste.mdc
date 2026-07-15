@@ -1,0 +1,33 @@
+---
+description: High-end Flutter UI design rules — anti-slop, bento grids, glassmorphism, parametric dials. Apply when writing or restyling Flutter widgets.
+globs: ["**/*.dart"]
+alwaysApply: false
+---
+
+# Flutter Taste — design rules for AI-generated UI
+
+Elevate Flutter output from "Material Slop" to luxury digital products. Full
+protocol: `SKILL.md`.
+
+## Phase 0 — Design Read (before any widget)
+State the industry/audience, declare an aesthetic direction (Obsidian dark /
+Cloud editorial-light / Brutalist / custom), and confirm the three dials.
+
+## The three dials (1–10)
+- `FLUTTER_LAYOUT_VARIANCE`: 1-3 column/list · 5-7 asymmetric/overlap · 10 bento + 3D
+- `FLUTTER_MOTION`: 1-3 fades/hero · 5-7 staggered + spring · 10 scroll-driven/state machines
+- `FLUTTER_DENSITY`: 1-3 luxury whitespace · 5-7 standard · 10 data-dense
+
+## Anti-Slop Ban List (hard rules)
+1. No em-dash (`—` / `–`) in code or strings.
+2. No boilerplate: no "Counter", "Hello World", "Sample Item".
+3. No AI-purple: no `#7C3AED`, no `Colors.deepPurple`, no generic indigo→purple gradients.
+4. Never ship a default un-styled `Scaffold`.
+5. Use `Theme.of(context).colorScheme` for color; use `withValues(alpha:)`, never `withOpacity`.
+
+## High-end standards
+- Bento/staggered grids over `ListTile` for primary content.
+- Glass cards carry a 1px inner stroke; back with `BackdropFilter` blur 10-20.
+- Mesh gradients (overlapping radial) for organic backgrounds; accent glows via large-radius `BoxShadow`.
+- Stagger entrance animations by `index * delay`.
+- Match brightness to context: the white inner stroke assumes a DARK surface — invert for light/accessibility-first UIs.
