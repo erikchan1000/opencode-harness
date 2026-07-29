@@ -159,7 +159,7 @@ def parse_findings_table(text: str) -> list[Finding]:
             return "" if value.lower() in EMPTY_CELL_VALUES else value
 
         fid = cell("id").strip()
-        if not fid or not re.match(r"^F\d+", fid):
+        if not fid or not re.match(r"^[A-Z]+\d+", fid):
             continue  # skip non-finding rows
 
         if fid in seen_ids:
@@ -186,7 +186,7 @@ def parse_findings_table(text: str) -> list[Finding]:
             sys.exit(2)
 
         deps_raw = cell("depends_on")
-        deps = [d.strip() for d in re.findall(r"F\d+", deps_raw)] if deps_raw else []
+        deps = [d.strip() for d in re.findall(r"[A-Z]+\d+", deps_raw)] if deps_raw else []
 
         files_raw = cell("touches_files")
         files = [
