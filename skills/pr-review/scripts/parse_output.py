@@ -21,6 +21,101 @@ import re
 import sys
 from typing import Any
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI color codes (pr-agent logs wrap output in them)."""
+    return _ANSI_RE.sub("", text)
+
+
+def _extract_yaml_review(text: str) -> dict[str, Any] | None:
+    """Extract the FINAL fenced YAML review block from raw pr-agent logs.
+
+    With `publish_output=false`, pr-agent prints its prompt (which contains
+    an *example* YAML block) and then the model's actual YAML answer. Both
+    appear as ```yaml fences in the log stream, so we must take the LAST
+    block that parses as a review with real content — the model's answer.
+
+    Returns the parsed `review` dict, or None if no YAML review was found.
+
+    Note: fence-pairing is unreliable here — pr-agent's logs can emit
+    back-to-back ```yaml fences (the "prediction:" log line and the answer
+    itself), which desynchronizes naive open/close matching. Instead we
+    anchor on lines that start a `review:` document and consume until the
+    next fence or log-timestamp line.
+    """
+    blocks: list[str] = []
+    for m in re.finditer(r"^review:\s*$", text, re.MULTILINE):
+        rest = text[m.start():]
+        # Terminate at the next fence or pr-agent log line, whichever first.
+        end = len(rest)
+        for stop in (
+            re.search(r"^```", rest[1:], re.MULTILINE),
+            re.search(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", rest[1:], re.MULTILINE),
+        ):
+            if stop:
+                end = min(end, stop.start() + 1)
+        blocks.append(rest[:end])
+    candidates: list[dict[str, Any]] = []
+    for block in blocks:
+        if "key_issues_to_review" not in block:
+            continue
+        try:
+            import yaml  # PyYAML; fall back to regex patterns if missing
+
+            parsed = yaml.safe_load(block)
+        except Exception:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        review = parsed.get("review")
+        if not isinstance(review, dict):
+            continue
+        # Skip the prompt's example block: its issue placeholders are
+        # literal "..." / "directory/xxx.py" filler.
+        issues = review.get("key_issues_to_review") or []
+        if isinstance(issues, list) and any(
+            isinstance(i, dict)
+            and "xxx" in str(i.get("relevant_file", ""))
+            for i in issues
+        ):
+            continue
+        candidates.append(review)
+    return candidates[-1] if candidates else None
+
+
+def _findings_from_yaml(review: dict[str, Any]) -> list[dict[str, Any]]:
+    """Convert a parsed pr-agent YAML review into the findings schema."""
+    findings: list[dict[str, Any]] = []
+    issues = review.get("key_issues_to_review") or []
+    if isinstance(issues, list):
+        for issue in issues:
+            if not isinstance(issue, dict):
+                continue
+            header = str(issue.get("issue_header", "")).strip()
+            content = str(issue.get("issue_content", "")).strip()
+            start = issue.get("start_line")
+            findings.append({
+                "severity": _infer_severity(f"{header} {content}"),
+                "category": header or "review",
+                "file": str(issue.get("relevant_file", "")).strip(),
+                "line": int(start) if isinstance(start, int) else None,
+                "problem": content,
+                "fix": "",
+            })
+    security = str(review.get("security_concerns", "")).strip()
+    if security and security.lower() not in ("no", "none", "n/a"):
+        findings.append({
+            "severity": "critical",
+            "category": "Security",
+            "file": "",
+            "line": None,
+            "problem": security,
+            "fix": "",
+        })
+    return findings
+
 
 def _extract_score(text: str) -> int | None:
     """Extract confidence/review score from pr-agent output."""
@@ -210,7 +305,7 @@ def format_caveman(score: int | None, findings: list[dict]) -> str:
     """Format as caveman-review one-liners."""
     lines = []
     if score is not None:
-        lines.append(f"Score: {score}/5")
+        lines.append(f"Score: {score}/100")
         lines.append("")
 
     for f in findings:
@@ -229,7 +324,7 @@ def format_markdown(score: int | None, findings: list[dict]) -> str:
     """Format as a clean markdown table."""
     lines = []
     if score is not None:
-        lines.append(f"**Review Score: {score}/5**")
+        lines.append(f"**Review Score: {score}/100**")
         lines.append("")
 
     if not findings:
@@ -266,8 +361,22 @@ def main() -> int:
             print("No review output to parse.")
         return 0
 
-    score = _extract_score(raw_input)
-    findings = _extract_findings(raw_input)
+    raw_input = _strip_ansi(raw_input)
+
+    # Preferred path: pr-agent's own YAML answer (publish_output=false logs).
+    # The legacy markdown patterns below remain as a fallback for other
+    # output modes.
+    yaml_review = _extract_yaml_review(raw_input)
+    if yaml_review is not None:
+        raw_score = yaml_review.get("score")
+        try:
+            score = int(str(raw_score).strip())
+        except (TypeError, ValueError):
+            score = None
+        findings = _findings_from_yaml(yaml_review)
+    else:
+        score = _extract_score(raw_input)
+        findings = _extract_findings(raw_input)
 
     formatters = {
         "json": format_json,
