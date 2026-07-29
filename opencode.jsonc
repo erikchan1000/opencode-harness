@@ -2,6 +2,17 @@
   "$schema": "https://opencode.ai/config.json",
   "permission": "allow",
   "instructions": ["/Users/erikchan/.config/opencode/AGENTS.md"],
+  // Allow ONE level of subagent nesting (default is 1 = none). This exists
+  // solely so `harness-pipeline` can fan out to harness-impl/review/test/
+  // debug, keeping per-finding gate chatter out of the orchestrator's
+  // context. Depth accounting: orchestrator=0, pipeline runner=1, leaf
+  // roles=2. Every leaf harness-* agent keeps `task: false`, so depth 2 is
+  // self-limiting — nothing can spawn a third level even by accident.
+  //
+  // Do NOT raise this to 3+ without also capping fan-out: there is no
+  // concurrency limit in opencode, so nesting multiplies rather than adds
+  // (6 findings x 4 gates x N = runaway parallel opus sessions).
+  "subagent_depth": 2,
   // Tracks AI coding activity (files, lines, time) to your WakaTime
   // dashboard. Requires an API key in ~/.wakatime.cfg. The plugin
   // auto-downloads wakatime-cli on first run.
@@ -14,7 +25,7 @@
   "agent": {
     // Orchestrator + design + planning. Strongest reasoning model so it
     // makes good routing decisions and handles architecture itself.
-    "build": { "model": "anthropic/claude-opus-4-8" },
+    "build": { "model": "anthropic/claude-opus-5" },
     // Balanced, lower-cost workhorse for multi-step general tasks.
     "general": { "model": "anthropic/claude-sonnet-4-6" },
     // Fast, cheap model for codebase search and navigation.
@@ -24,7 +35,7 @@
     "coder": { "model": "anthropic/claude-sonnet-4-6" },
     // Deep-reasoning / debugging specialist; prompt in agent/deep-reasoner.md.
     // Moved off openai/gpt-5.5-pro for the same reason.
-    "deep-reasoner": { "model": "anthropic/claude-opus-4-8" }
+    "deep-reasoner": { "model": "anthropic/claude-opus-5" }
   },
   "mcp": {
     "cloudflare": {
@@ -54,6 +65,16 @@
     "context7": {
       "type": "local",
       "command": ["npx", "-y", "@upstash/context7-mcp"]
+    },
+    // Web search: Brave's official MCP server (web/news/image search,
+    // summaries). Free tier: 2k queries/mo. The API key lives OUTSIDE this
+    // tracked repo in a chmod-600 local file, injected via {file:...}.
+    "brave-search": {
+      "type": "local",
+      "command": ["npx", "-y", "@brave/brave-search-mcp-server"],
+      "environment": {
+        "BRAVE_API_KEY": "{file:/Users/erikchan/.config/opencode/brave-api-key}"
+      }
     }
   }
 }

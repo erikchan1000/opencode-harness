@@ -26,7 +26,7 @@ description: >-
     </example>
 
 mode: subagent
-model: anthropic/claude-opus-4-8
+model: anthropic/claude-opus-5
 tools:
   task: false
   todowrite: false

@@ -1,4 +1,5 @@
 ---
+model: anthropic/claude-opus-5
 description: >-
   Harness unit-test subagent. After the implementation subagent ships a
   diff, this agent writes or extends tests that lock in the fix and runs

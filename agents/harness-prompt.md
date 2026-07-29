@@ -1,4 +1,5 @@
 ---
+model: anthropic/claude-sonnet-4-6
 description: >-
   Harness prompt-author subagent. Takes a SINGLE finding from
   findings.md and produces one self-contained implementation prompt at

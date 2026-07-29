@@ -42,21 +42,63 @@ Do not bother with a harness for:
 
 ## The standard roster
 
-A complete harness has seven roles. Cut the ones not needed; never add an
-eighth without a strong reason — diluting roles is how harnesses go bad.
+A complete harness has eight roles. Cut the ones not needed; never add a
+ninth without a strong reason — diluting roles is how harnesses go bad.
 
 | Role | `subagent_type` | Tool restrictions | Output |
 |------|-----------------|-------------------|--------|
 | **Research** | `harness-research` | `edit: false` | Structured findings file with file:line refs |
 | **Prompt author** | `harness-prompt` | — | One tailored implementation-prompt `.md` per finding |
+| **Pipeline runner** | `harness-pipeline` | scoped `task` (see below) | One compact per-finding verdict |
 | **Implementation** | `harness-impl` | — | A diff that compiles + one-line completion log |
 | **Debug** | `harness-debug` | `edit: false` | Root-cause note + recommended patch (no edits) |
 | **Review** | `harness-review` | `edit: false` | PR-Agent findings + PASS/NEEDS_FIX/BLOCKED verdict |
 | **Unit test** | `harness-test` | — | New / amended tests + green test-run log |
 | **Recovery** | `harness-recovery` | `edit: false` | A revised prompt for whichever role failed |
 
-All harness agents have `task: false` (no recursive sub-spawning) and
-`todowrite: false` (parent owns the task list).
+Every harness agent has `todowrite: false` (parent owns the task list).
+All of them also have `task: false` **except `harness-pipeline`**, which is
+the single role permitted to fan out — and only to the four leaf roles it
+coordinates:
+
+```yaml
+permission:
+  task:
+    "*": deny            # wildcard first — last matching rule wins
+    harness-impl: allow
+    harness-review: allow
+    harness-test: allow
+    harness-debug: allow
+```
+
+This requires `"subagent_depth": 2` in `opencode.json(c)`; the default of
+`1` blocks all nesting. Depth accounting is orchestrator=0, runner=1,
+leaf=2. Because the leaf roles keep `task: false`, depth 2 is
+self-limiting — nothing can reach a third level even by mistake.
+
+Two mechanisms must both be satisfied for nesting to work, and they are
+independent: `subagent_depth` gates nesting *depth*, while an injected
+blanket `task: "*": deny` gates each subagent's *ability* to spawn at all.
+Declaring any `task` rule on an agent suppresses that injected deny.
+Raising `subagent_depth` alone is a no-op.
+
+### Why the runner exists
+
+The orchestrator's context window — not concurrency — is the scaling limit
+of a harness. OpenCode imposes no cap on parallel subagents, so a wave can
+be as wide as the DAG allows. What it cannot do is stop the parent from
+absorbing four gate transcripts per finding per wave.
+
+The pipeline runner collapses that to one verdict per finding, and keeps
+each finding's warm-retry loop local, where the failure context is already
+in-window instead of reconstructed across orchestrator turns.
+
+`harness-pipeline` deliberately does **not** set `edit: deny`, even though
+it must never write code. Session-level deny rules are inherited by child
+sessions (`deriveSubagentSessionPermission`), so an agent-level edit deny
+on the runner risks propagating into its `harness-impl` children and
+silently breaking every implementation. The "coordinate, never implement"
+rule is therefore enforced in the runner's prompt instead.
 
 ### Model assignments
 
@@ -65,10 +107,16 @@ The roles run on a deliberate two-tier model split, set via `model:`
 
 | Role(s) | Model | Rationale |
 |---------|-------|-----------|
-| Implementation (`harness-impl`) | `anthropic/claude-sonnet-4-6` (switched from opus-4-8-fast: zero rate-limit quota) | Volume work from a self-contained prompt; speed and cost matter more than peak judgment |
-| Review, Debug, Recovery | `anthropic/claude-opus-4-8` (switched from claude-fable-5: that model errored with empty output) | High-judgment gates: catching subtle bugs, root-cause analysis, and prompt rewriting after failures |
-| Research, Prompt, Test | (inherits session default) | — |
-| Orchestration (parent agent) | Run the parent session on `anthropic/claude-fable-5` | The orchestrator makes the retry/defer/escalate decisions; use the strongest model |
+| Implementation (`harness-impl`), Test (`harness-test`) | `anthropic/claude-opus-5` | Code-writing roles: strongest implementation model (2026-07-17: switched impl from sonnet-4-6 per user preference) |
+| Review (`harness-review`), Debug (`harness-debug`), Recovery (`harness-recovery`) | `anthropic/claude-opus-5` | Judgment roles: security/correctness review, root-cause analysis, and diagnosing *why an agent failed* — the three hardest reasoning jobs in the loop |
+| Research (`harness-research`), Prompt (`harness-prompt`), Pipeline (`harness-pipeline`) | `anthropic/claude-sonnet-4-6` | Structured-output roles: scoped exploration, templating a finding into a prompt, and sequencing gates from explicit PASS/NEEDS_FIX verdicts. None needs frontier reasoning; all three are high-volume, so this is where the cost lives |
+| Orchestration (parent agent) | Run the parent session on `anthropic/claude-opus-5` | The orchestrator makes the retry/defer/escalate decisions; use the strongest model |
+
+Research is the one to resist downgrading further. It is tempting to put it
+on Haiku alongside the built-in `explore` agent, but research does more than
+search — it assigns severity and declares `depends_on` / `touches_files`,
+which is the input the DAG builder schedules from. Bad findings poison every
+downstream phase, so Sonnet is the floor.
 
 When updating model assignments, edit the frontmatter of the
 corresponding `~/.config/opencode/agents/harness-*.md` files and keep
@@ -104,13 +152,13 @@ Harness phases:
         from the findings metadata.
 - [ ] Phase 3 — Execute. For each wave (in order):
         (a) Generate prompts for this wave's findings (parallel).
-        (b) Run impl pipelines IN PARALLEL: impl → debug (if needed).
-        (c) REVIEW GATE (mandatory): run harness-review for each finding.
-            If verdict is NEEDS_FIX, route findings back to impl.
-        (d) TEST GATE (mandatory): run harness-test for each finding.
-            A finding is NOT done until tests pass.
-        (e) On failure: warm retry (resume task_id) → cold retry
-            (recovery agent + fresh impl).
+        (b) Open the wave's review channel (push branch + draft PR),
+            or record REVIEW_MODE=fallback if unavailable.
+        (c) Spawn ONE harness-pipeline runner per finding, IN PARALLEL.
+            Each runner owns impl → review → test + warm retries and
+            returns a single verdict.
+        (d) Cold retry (recovery agent + fresh runner) for any finding
+            a runner reports BLOCKED.
         Wait for the whole wave to complete before the next wave.
 - [ ] Phase 4 — Wrap. Aggregate completion logs into report.md.
         Update CHANGELOG / ADRs per repo conventions.
@@ -130,6 +178,31 @@ Decide and write down:
 Write this to `plan/objective.md` using the template at
 `${CLAUDE_SKILL_DIR}/templates/objective.md`. The `plan/` directory
 lives at the repo root, gitignored unless the team wants it tracked.
+
+#### Preconditions — check these before Phase 1
+
+Verify the harness can actually run end-to-end. Each of these fails at an
+awkward moment (mid-wave, after work is in flight) if discovered late:
+
+```bash
+# 1. Nesting is enabled — required for harness-pipeline to fan out.
+#    Expect: 2 (or higher). If 1/absent, pipeline runners cannot spawn.
+grep -o '"subagent_depth"[[:space:]]*:[[:space:]]*[0-9]*' \
+  ~/.config/opencode/opencode.jsonc
+
+# 2. Review gate reachable — PR-Agent needs a REAL GitHub PR.
+gh auth status                  # authenticated?
+git remote get-url origin       # pushable remote exists?
+echo "${PR_AGENT_MODEL:?unset}" # LLM key/model configured?
+
+# 3. Test runner exists (adapt to the repo).
+ls package.json pyproject.toml pubspec.yaml 2>/dev/null
+```
+
+Record the outcome in `objective.md`. If check 2 fails, set
+`REVIEW_MODE=fallback` in the objective now and tell the user the review
+gate will be a `general`-subagent manual review rather than PR-Agent —
+do not discover this at wave 1.
 
 ### Phase 1 — Research (parallel)
 
@@ -200,73 +273,86 @@ If the script surfaces errors, resolve them before proceeding:
 
 Process waves IN ORDER. For each wave:
 
+The orchestrator spawns exactly two kinds of thing per wave: prompt
+authors, then pipeline runners. It never invokes `harness-impl`,
+`harness-test`, or `harness-debug` directly — those are the runner's
+children.
+
 ```
 For each wave:
-  Step 3a — Prompt (parallel):
+  Step 3a — Prompt (parallel, orchestrator-spawned):
     For each F0N in this wave (PARALLEL):
       - Invoke Task(subagent_type: "harness-prompt",
                     prompt: "<finding details from findings.md>
                              Template: ${CLAUDE_SKILL_DIR}/templates/impl-prompt.md
                              Output: plan/prompts/F0N-<slug>.md
                              Prior wave results: <summary of completed findings if any>")
-      - Save task_id (not needed for prompt, but consistent)
 
-  Step 3b — Finding pipelines (parallel):
-    For each F0N in this wave (PARALLEL):
-      - [ ] Implementation: invoke Task(subagent_type: "harness-impl",
-                                        prompt: "Prompt: plan/prompts/F0N-<slug>.md")
-            Save task_id as impl_task_id_F0N.
-      - [ ] On impl failure — WARM RETRY:
-              Resume via Task(subagent_type: "harness-impl",
-                              task_id: impl_task_id_F0N,
-                              prompt: "You timed out / returned empty.
-                                       Your scratchpad shows: <summary>.
-                                       Focus only on: <remaining items>.")
-      - [ ] On warm retry failure — COLD RETRY:
-              Invoke Task(subagent_type: "harness-recovery",
-                          prompt: "<original prompt path + failed transcript>")
-              Then invoke a FRESH Task(subagent_type: "harness-impl",
-                                       prompt: "plan/prompts/F0N.recovery-1.md")
-      - [ ] Debug: invoke Task(subagent_type: "harness-debug")
-              only if the impl output shows a regression or unexpected behaviour.
-              Route the debug note back to impl if a re-fix is needed.
-
-  Step 3c — REVIEW GATE (mandatory, parallel per finding):
-    CRITICAL: Run PR-Agent review BEFORE writing tests. Do NOT skip.
-    The review gate catches security issues, correctness bugs, and
-    API contract mismatches that tests alone won't surface.
+  Step 3b — Pipelines (parallel, orchestrator-spawned):
+    Emit ALL of this wave's runners in ONE assistant message so they run
+    concurrently and the message boundary gives you the wave barrier free.
 
     For each F0N in this wave (PARALLEL):
-      - [ ] Invoke Task(subagent_type: "harness-review",
+      - [ ] Invoke Task(subagent_type: "harness-pipeline",
                         prompt: "Finding: F0N — <title>
                                  Prompt file: plan/prompts/F0N-<slug>.md
-                                 Changed files: <list from impl output>
+                                 Failure budget: 2
+                                 Gates: impl -> test")
+            Save task_id as pipeline_task_id_F0N.
+
+    Each runner internally does: impl -> (debug if needed) -> test,
+    with its own warm retries. It returns ONE verdict line per finding.
+
+  Barrier: wait for ALL runners in this wave to return DONE or BLOCKED.
+
+  Step 3c — REVIEW GATE (mandatory, ONCE per wave, orchestrator-run):
+    CRITICAL: Do NOT skip. Do NOT run this per-finding — PR-Agent reviews
+    a PR, and the PR is a wave-level artifact. N per-finding invocations
+    would be N redundant reviews of the same full diff, each one flagging
+    other findings' changes as noise.
+
+      - [ ] Push the wave's branch; create/update a draft PR:
+              gh pr create --draft   (first wave)  |  git push  (later waves)
+      - [ ] Invoke Task(subagent_type: "harness-review",
+                        prompt: "Wave: <n>
+                                 Findings in wave: F0N..F0M (titles)
+                                 PR URL: <real URL>
+                                 Changed files: <union from all runners>
                                  Extra instructions: <domain focus if any>")
-      - [ ] If verdict is NEEDS_FIX: route blocking findings back to
-              impl agent (warm retry with findings as context).
-      - [ ] If verdict is PASS: proceed to test gate.
-      - [ ] If verdict is BLOCKED: escalate to orchestrator (missing
-              API key, PR-Agent crash, etc.)
+      - [ ] PASS      -> mark all wave findings done; append to report.md.
+      - [ ] NEEDS_FIX -> for each finding with blocking findings against it,
+                         WARM-RETRY its runner:
+                           Task(subagent_type: "harness-pipeline",
+                                task_id: pipeline_task_id_F0N,
+                                prompt: "Review returned blocking findings
+                                         against your diff: <findings>.
+                                         Fix via harness-impl, re-run tests,
+                                         report back.")
+                         Then re-run this gate.
+      - [ ] BLOCKED   -> fall back to a `general` subagent review with
+                         explicit security-focused instructions (see below).
 
-  Step 3d — TEST GATE (mandatory, parallel per finding):
-    CRITICAL: A finding is NOT done until tests pass. Do NOT skip this step.
-    Do NOT mark a finding complete after impl alone — the test gate is what
-    separates "code was written" from "code is correct."
+  Step 3d — COLD RETRY (only for BLOCKED findings):
+      - [ ] Invoke Task(subagent_type: "harness-recovery",
+                        prompt: "<original prompt path + runner's BLOCKED
+                                  report + scratchpad paths>")
+      - [ ] Then a FRESH Task(subagent_type: "harness-pipeline",
+                              prompt: "Prompt file: plan/prompts/F0N.recovery-1.md
+                                       Failure budget: 1")
 
-    For each F0N in this wave (PARALLEL):
-      - [ ] Invoke Task(subagent_type: "harness-test",
-                        prompt: "Finding: F0N — <title>
-                                 Changed files: <list from impl output>
-                                 Write tests that verify the implementation
-                                 and run them. Attach the green test log.")
-      - [ ] If tests FAIL: route failure back to impl agent (warm retry)
-              or debug agent for root-cause analysis.
-      - [ ] Only after tests PASS: mark F0N done in findings.md;
-              append to report.md.
-
-  Barrier: wait for ALL F0N in this wave to reach DONE or BLOCKED.
   Move to the next wave.
 ```
+
+**Why review moved after the test gate.** The previous version of this
+skill said both "review each finding in parallel" and "review once per wave
+over the full diff" — mutually exclusive instructions. The wave-level
+reading is the correct one, which forces review to sit outside the
+per-finding runner. Two consequences, both net positive: the review sees
+the tests as well as the impl (reviewing test quality is legitimate review
+work, and matches how a human PR review actually happens), and the wave
+pays one PR-Agent call instead of N. The cost is that a blocking review
+finding can require redoing a finding's tests — rare enough to be the
+cheaper trade.
 
 **Why JIT prompt generation**: prompts for Wave 2 findings are written
 AFTER Wave 1 results are in. If Wave 1 reveals the root cause was
@@ -299,28 +385,39 @@ for AI-powered code review. Key operational requirements:
    - This can be done once per wave (after all impl agents finish),
      not per-finding
 
-2. **Review runs after all impl agents in the wave complete**, not
-   per-finding. PR-Agent reviews the full diff, which is more useful
-   than reviewing individual findings in isolation.
+2. **Review runs once per wave, after every pipeline runner has
+   returned** — never per-finding. PR-Agent reviews the full PR diff,
+   which is both cheaper and more useful than N reviews of the same
+   diff from N different vantage points.
 
 3. **If PR-Agent is BLOCKED** (missing API key, network error, etc.),
    the orchestrator should fall back to a manual review using the
    `general` subagent type with explicit security-focused instructions.
+   Check for this in Phase 0, not at wave 1.
 
-4. **Blocking findings** from the review must be routed back to impl
-   agents before proceeding to the test gate. Advisory findings are
-   logged but do not block.
+4. **Blocking findings** are routed back by warm-retrying the owning
+   finding's `harness-pipeline` runner (via its saved `task_id`), which
+   re-invokes `harness-impl` and re-runs its test gate. Advisory findings
+   are logged in `report.md` but do not block.
+
+5. **`harness-review` is spawned by the orchestrator, not by a runner.**
+   It is deliberately absent from `harness-pipeline`'s `task` allowlist,
+   so a runner physically cannot invoke it.
 
 ### Test gate enforcement
 
-The test gate (Step 3d) is **mandatory** for every finding pipeline.
-The orchestrator MUST NOT:
+The test gate is **mandatory** for every finding pipeline, and it lives
+inside the pipeline runner (`harness-pipeline` step 3). Neither the
+orchestrator nor a runner may:
 
 - Mark a finding as "done" without a green test run
 - Skip the test step to "save time" — this creates false confidence
 - Move to the next wave while any finding in the current wave has
   impl done but tests not run
 - Treat build/typecheck success alone as sufficient verification
+
+A runner that returns `DONE` without a `Tests:` line in its verdict has
+violated its contract; treat that verdict as BLOCKED and warm-retry it.
 
 The test agent should write tests that:
 
@@ -363,7 +460,8 @@ decisions to disk as the task advances, so:
 
 - **Path**: `plan/scratch/<role>-<scope>-<uuid>.md`
   - `<role>` is human-readable: `research-data-sherpa`, `prompt`,
-    `impl-F01`, `debug-F03`, `test-F02`, `recovery-F01-1`.
+    `pipeline-F01`, `impl-F01`, `debug-F03`, `test-F02`,
+    `recovery-F01-1`.
   - `<uuid>` is generated once at start: `uuidgen | tr 'A-Z' 'a-z'`.
 - **Format**: copy `${CLAUDE_SKILL_DIR}/templates/scratchpad.md`.
 - **Lifecycle**: created on the first action; appended to (not
@@ -393,9 +491,16 @@ Bad entries (skip these — they are noise):
 
 When the parent dispatches a wave's pipelines in parallel, every
 finding-pipeline's subagents share the same finding ID prefix
-(`impl-F01`, `debug-F01`, `test-F01`) but have unique UUIDs. The
-parent can search `plan/scratch/*-F0N-*` to find every scratchpad
-related to one finding when writing the wrap-up report.
+(`pipeline-F01`, `impl-F01`, `debug-F01`, `test-F01`) but have unique
+UUIDs. The parent can search `plan/scratch/*-F0N-*` to find every
+scratchpad related to one finding when writing the wrap-up report.
+
+This is why the scratchpad convention matters more once runners are in
+play than it did when the orchestrator spawned every leaf directly: the
+orchestrator no longer sees leaf transcripts at all, so `plan/scratch/`
+is its only window into what `harness-impl` and `harness-test` actually
+did. A runner that fails to cite its children's scratchpad paths has
+made its finding un-auditable.
 
 Recommend gitignoring `plan/scratch/` (working memory is noise);
 keep `plan/findings.md`, `plan/pipelines.md`,
@@ -419,17 +524,27 @@ The skill ships five templates — copy and fill in:
 
 ## Subagent definitions
 
-The skill relies on six global subagent definitions installed at
+The skill relies on eight global subagent definitions installed at
 `~/.config/opencode/agents/harness-*.md`. Invoke them via the Task tool
-with the corresponding `subagent_type`:
+with the corresponding `subagent_type`.
+
+Spawned by the **orchestrator**:
 
 - `harness-research` — read-only codebase exploration
 - `harness-prompt` — per-finding prompt authoring (one finding at a time)
-- `harness-impl` — focused implementation from a single prompt
-- `harness-debug` — root-cause analysis without edits
-- `harness-review` — PR-Agent code review gate (PASS/NEEDS_FIX/BLOCKED)
-- `harness-test` — test writing + execution gate
+- `harness-pipeline` — per-finding pipeline runner (impl → test)
+- `harness-review` — PR-Agent code review gate (PASS/NEEDS_FIX/BLOCKED),
+  once per wave
 - `harness-recovery` — prompt rewriting for cold retries
+
+Spawned by **`harness-pipeline`** (never by the orchestrator directly):
+
+- `harness-impl` — focused implementation from a single prompt
+- `harness-test` — test writing + execution gate
+- `harness-debug` — root-cause analysis without edits
+
+That split is enforced by `harness-pipeline`'s `task` allowlist, not just
+convention. Requires `"subagent_depth": 2`.
 
 ## Example invocations
 
@@ -470,10 +585,24 @@ See `${CLAUDE_SKILL_DIR}/examples/` for worked examples:
    unactionable; the DAG builder cannot schedule it AND the prompt-
    author has nothing to anchor the impl prompt against.
 9. **Shipping the harness output without running the tests.** The
-   test phase (Step 3c) is a MANDATORY gate, not optional polish.
-   Every finding must have a green test run before it is marked done.
-   "It compiles" is not "it works." If you find yourself skipping
+   test gate inside each pipeline runner is MANDATORY, not optional
+   polish. Every finding must have a green test run before it is marked
+   done. "It compiles" is not "it works." If you find yourself skipping
    tests to move faster, you are building a house of cards.
+10. **The orchestrator spawning `harness-impl` / `harness-test` /
+   `harness-debug` directly.** Those are the runner's children. Bypassing
+   the runner pulls every gate transcript back into the orchestrator's
+   context, which is the exact cost the runner exists to eliminate — and
+   it silently drops the per-finding retry loop.
+11. **Raising `subagent_depth` past 2 to "allow more parallelism."**
+   Depth is not a concurrency knob; opencode has no concurrency cap at
+   all, so a wave is already as wide as the DAG permits. What extra depth
+   buys is multiplicative fan-out — findings × gates × sub-delegations —
+   with no ceiling. Depth 2 is deliberately the minimum that makes the
+   runner work.
+12. **Reviewing per-finding instead of per-wave.** N runs of PR-Agent
+   over the same PR diff, each flagging the other findings' changes as
+   unexplained noise. Review the wave once.
 
 ## Closing checklist
 
@@ -487,7 +616,8 @@ Before declaring the harness done:
 - [ ] `plan/prompts/` has one file per executed finding, plus any
       `.recovery-N.md` files
 - [ ] `plan/scratch/` has at least one scratchpad per subagent
-      invocation that ran
+      invocation that ran, including one `pipeline-F0N-*` per finding
+      and the `impl-` / `test-` scratchpads its runner cited
 - [ ] `plan/report.md` summarises completions and any deferred items
 - [ ] CHANGELOG / ADRs updated per repo conventions
 - [ ] **Every finding has a test run logged** (green test output or

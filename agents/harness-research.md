@@ -1,4 +1,5 @@
 ---
+model: anthropic/claude-sonnet-4-6
 description: >-
   Harness research subagent. Read-only against production code. Explores
   a scoped slice of the codebase and produces a structured list of
