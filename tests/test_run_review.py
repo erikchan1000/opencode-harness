@@ -182,14 +182,15 @@ class TestCheckHasDiff:
         """Should return True when there are changes."""
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
-                stdout=" src/foo.ts | 10 +++++++---\n 1 file changed\n"
+                returncode=0,
+                stdout=" src/foo.ts | 10 +++++++---\n 1 file changed\n",
             )
             assert run_review._check_has_diff("main") is True
 
     def test_no_diff(self):
         """Should return False when there are no changes."""
         with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(stdout="")
+            mock_run.return_value = MagicMock(returncode=0, stdout="")
             assert run_review._check_has_diff("main") is False
 
     def test_handles_timeout(self):

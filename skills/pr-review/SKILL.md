@@ -101,7 +101,9 @@ format that `harness-review.md` expects (PASS / NEEDS_FIX / BLOCKED).
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PR_AGENT_MODEL` | No | `anthropic/claude-opus-4-6` | LLM model for reviews |
+| `PR_AGENT_MODEL` | No | `anthropic/claude-opus-5-5` | LLM model for reviews. Must be in pr-agent's MAX_TOKENS registry *or* paired with `PR_AGENT_MODEL_MAX_TOKENS`; the runner validates up front and lists registered options on mismatch |
+| `PR_AGENT_MODEL_MAX_TOKENS` | Only for unregistered models | `1000000` (default model only) | Input-window size passed as `config.custom_model_max_tokens`. pr-agent 0.35.0 predates opus 5.5, so its registry has no entry — the runner supplies one |
+| `PR_AGENT_TEMPERATURE` | No | `1` | Sampling temperature. Newer Anthropic models REJECT pr-agent's built-in 0.2 with "temperature is deprecated for this model" |
 | `OPENAI_KEY` | If using OpenAI | - | OpenAI API key |
 | `ANTHROPIC_KEY` | If using Claude | - | Anthropic API key |
 | `GROQ_API_KEY` | If using Groq | - | Groq API key |
@@ -128,6 +130,22 @@ PR-Agent uses LiteLLM, supporting: OpenAI, Anthropic Claude, Google
 Gemini, Ollama (local), Groq, DeepSeek, Mistral, Amazon Bedrock,
 Azure OpenAI, and more. Set `PR_AGENT_MODEL` to the LiteLLM model
 string (e.g., `ollama/qwen2.5-coder:32b` for local inference).
+
+## Operational notes (learned 2026-08-29, PR #422)
+
+- **Large PRs:** GitHub's API refuses diffs beyond ~300 files / ~20k lines
+  (HTTP 406; pr-agent logs "PR has no files" and exits 0). The runner
+  detects this on `--pr-url` runs and auto-falls back to `--local` against
+  the PR's base branch when the checkout is on the PR's head branch. For
+  harness runs, prefer reviewing per wave instead of one mega-PR.
+- **`--local` mechanics:** pr-agent's LocalGitProvider needs a `.git`
+  DIRECTORY (git worktrees have a `.git` file), a clean tree, and a LOCAL
+  base branch. The runner satisfies all three by reviewing a throwaway
+  `git clone --local` of the repo (hardlinked, cheap, auto-deleted).
+  Consequence: uncommitted changes are NOT reviewed (the runner warns).
+- **Provider selection:** `git_provider` must be set via the
+  `CONFIG__GIT_PROVIDER` env var, never `--config.git_provider` — pr-agent
+  picks the provider before CLI config args apply.
 
 ## Exit codes
 
