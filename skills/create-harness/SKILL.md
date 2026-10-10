@@ -161,7 +161,8 @@ Harness phases:
             a runner reports BLOCKED.
         Wait for the whole wave to complete before the next wave.
 - [ ] Phase 4 — Wrap. Aggregate completion logs into report.md.
-        Update CHANGELOG / ADRs per repo conventions.
+        Record decisions per the repo's AGENTS.md (shared memory first;
+        ADR/CHANGELOG only where the repo requires them).
 ```
 
 ### Phase 0 — Scope
@@ -437,8 +438,13 @@ in the finding's report entry.
 ### Phase 4 — Wrap
 
 - Aggregate completion logs from each finding into `plan/report.md`.
-- Update repo conventions (CHANGELOG, ADRs, etc.) per the repo's
-  `AGENTS.md` or equivalent.
+- Record decisions the way the repo's `AGENTS.md` says. Default to the
+  lightest record that survives the run: put what changed in the PR body,
+  and save each non-obvious decision from the completion logs as one memory
+  in the shared memory (e.g. supermemory) if the repo uses one. Write an ADR
+  or CHANGELOG entry only when the repo's rules require one for that kind of
+  change. A harness run does not need one ADR per finding, or a changelog
+  entry per finding.
 - Surface the report to the user with a short summary and links to
   each fixed finding.
 
@@ -619,7 +625,8 @@ Before declaring the harness done:
       invocation that ran, including one `pipeline-F0N-*` per finding
       and the `impl-` / `test-` scratchpads its runner cited
 - [ ] `plan/report.md` summarises completions and any deferred items
-- [ ] CHANGELOG / ADRs updated per repo conventions
+- [ ] Decisions recorded per the repo's AGENTS.md (memory and PR body
+      by default; ADR/CHANGELOG only if the repo requires them)
 - [ ] **Every finding has a test run logged** (green test output or
       documented exception for untestable findings like Terraform)
 - [ ] All tests pass; lints clean

@@ -29,7 +29,7 @@ Find and fix correctness / UX bugs in the mobile recording pipeline
 - [ ] `flutter test test/recording/` green.
 - [ ] Manual smoke on iPad Air M4 sim: record + stop produces
       transcripts with Speaker labels; MedASR refine works first try.
-- [ ] CHANGELOG entries + ADRs per AGENTS.md.
+- [ ] Decisions saved to supermemory; PR body lists the findings fixed.
 
 ## Failure budget
 - Warm retries per finding: 1
@@ -191,8 +191,8 @@ If F01 had failed:
 
 ## Phase 4 — Wrap
 
-Aggregate completion logs, update CHANGELOG and ADRs per repo
-conventions, surface a one-page report to the user.
+Aggregate completion logs, save the non-obvious decisions to supermemory,
+draft the PR body from the report, and surface a one-page report to the user.
 
 ## Takeaway
 

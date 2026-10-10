@@ -23,7 +23,8 @@
 - [ ] Lints / static analysis clean for areas touched.
 - [ ] Tests green for areas touched.
 - [ ] Manual smoke pass on the relevant runtime (sim, device, browser…).
-- [ ] CHANGELOG / ADR entries written per repo conventions.
+- [ ] Decisions recorded per the repo's AGENTS.md (shared memory and the
+      PR body by default; ADR/CHANGELOG only where the repo requires them).
 
 ## Failure budget
 

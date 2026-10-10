@@ -60,7 +60,7 @@ The parent passes you:
 - **Honour every `Constraints` bullet.** If you need to violate one, surface it; do not act unilaterally.
 - **Do not refactor for style.** This is not a cleanup pass.
 - **Do not add new dependencies** unless the prompt explicitly allows it.
-- **Do not update CHANGELOG / ADRs.** That is the orchestrator's job at wrap time.
+- **Do not write CHANGELOG entries, ADRs or memories.** List any non-obvious decision (what you chose, why, what you rejected) in your completion log. The orchestrator decides at wrap time where it is recorded.
 
 ## On stuck / timeout
 

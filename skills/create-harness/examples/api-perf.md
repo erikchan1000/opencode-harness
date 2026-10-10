@@ -27,7 +27,8 @@ endpoints and fix the highest-impact ones.
 - [ ] `npm run test` green.
 - [ ] Bench script (`scripts/bench.sh`) shows P99 improvement on
       changed endpoints.
-- [ ] CHANGELOG + ADR entries for any architectural changes.
+- [ ] ADR only for a change that clears the repo's ADR bar (e.g. a new
+      caching layer); everything else goes to memory and the PR body.
 
 ## Failure budget
 - Warm retries per finding: 1
@@ -95,8 +96,8 @@ Same loop. Two differences from the mobile example:
 
 ## Phase 4 — Wrap
 
-Aggregate, write a perf summary to `plan/report.md`, link to each
-ADR.
+Aggregate, write a perf summary to `plan/report.md`, and link any ADR
+the run produced.
 
 ## Takeaway
 
