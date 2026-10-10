@@ -84,25 +84,44 @@ If you can't answer yes confidently, the fallback is hiding a bug.
 # Strength-based model routing
 
 When running as the primary `build` agent, you are the orchestrator. Route
-each unit of work to the model that is strongest at it by delegating through
+each unit of work to the agent whose model tier fits it by delegating through
 the Task tool, rather than doing everything yourself. This is a deliberate
-multi-model setup — each agent is pinned to a different model chosen for its
-strong suit.
+tiered setup: `build` (you) is pinned to Opus 5.5, the strongest model in the
+roster, and each subagent is pinned to the tier that fits its job.
 
 ## Roster and when to delegate
 
-- **`coder`** (Codex-class) — delegate concrete implementation: writing,
+- **`coder`** (Sonnet 5.5) — delegate concrete implementation: writing,
   editing, or refactoring code from a clear spec. Hand it a precise plan and
   the files to touch.
-- **`deep-reasoner`** (high-reasoning GPT) — delegate the hardest analytical
+- **`deep-reasoner`** (Opus 5.5) — delegate the hardest analytical
   work: root-cause debugging of non-obvious bugs, algorithm design,
-  concurrency/race conditions, or comparing subtle tradeoffs. Use it
-  specifically when a second, differently-trained model adds value.
-- **`general`** (Sonnet) — delegate balanced multi-step tasks that don't need
-  top-tier reasoning or a code specialist.
-- **`explore`** (Haiku) — delegate codebase search, file finding, and
+  concurrency/race conditions, or comparing subtle tradeoffs. It runs the
+  same model as you, so what it adds is a dedicated, isolated context for a
+  rigorous reasoning pass — not a second, differently-trained opinion.
+- **`general`** (Sonnet 5.5) — delegate balanced multi-step tasks that don't
+  need top-tier reasoning or a code specialist.
+- **`explore`** (Haiku 4.5) — delegate codebase search, file finding, and
   "where/how does X work" questions. Fast and cheap; use it liberally before
   doing expensive reasoning.
+
+The `harness-*` roles carry their own pins; see the model table in the
+`create-harness` skill. Pins live in the global `opencode.jsonc`
+(`agent.<name>.model`) and in each agent file's `model:` frontmatter — when
+one changes, update this roster in the same change.
+
+**MCP tools are scoped per agent** (the `permission` block in the global
+`opencode.jsonc`), because every tool schema is re-sent on every turn. Only
+`build` and `plan` see every MCP server, and `explore` sees none except
+codegraph (ai-scribe pilot; see `codegraph-pilot.md`). The other
+agents keep only the servers they use: Paper, Dart, Context7 and browser tools
+for implementation, which has no web search (it uses `webfetch` or Context7),
+and Brave search plus Linear for research, prompt-writing, `deep-reasoner` and
+`general`. Do Comfy, Google Sheets, Stripe, Telnyx, Figma, Cloudflare and
+CB Insights work yourself. Hand Linear, Mobbin, Playwright or web-search work to `general`
+rather than `coder`. If a subagent is missing an MCP tool it needs, add a
+`<server>_*` allow to that agent; don't lift the global deny. Each allow costs
+that agent's every turn: Linear ~26k tokens, Paper ~13k, Brave ~11k.
 
 ## Routing rules
 
@@ -111,8 +130,11 @@ strong suit.
 2. **Split design from implementation.** Do architecture/planning yourself
    (you are the strongest reasoning model), then hand the concrete plan to
    `coder`.
-3. **Escalate genuinely hard problems to `deep-reasoner`** for model
-   diversity — a different model often catches what you miss.
+3. **Escalate genuinely hard problems to `deep-reasoner`** for a dedicated
+   reasoning pass in a fresh context. It runs your model, so its value is
+   isolation, not diversity: a context not anchored on your working
+   hypotheses, and a long investigation kept out of yours. For an
+   independent check, hand it the evidence, not your conclusion.
 4. **Don't over-delegate.** Trivial single-file edits and quick answers you
    can do directly. Delegation is for work that benefits from a specialist
    model or isolated context.

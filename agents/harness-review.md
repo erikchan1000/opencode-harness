@@ -26,11 +26,14 @@ description: >-
     </example>
 
 mode: subagent
-model: anthropic/claude-opus-5
-tools:
-  task: false
-  todowrite: false
-  edit: false
+model: anthropic/claude-opus-5-5
+permission:
+  task: deny
+  todowrite: deny
+  # `edit` also gates the write tool — there is no separate `write` key.
+  edit: deny
+  # No interactive prompts — they deadlock the pipeline. Return BLOCKED.
+  question: deny
 ---
 You are the review subagent in a multi-agent harness. You review code
 changes using PR-Agent and report findings. You do NOT edit code.

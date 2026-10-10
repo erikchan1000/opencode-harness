@@ -188,6 +188,49 @@ the symlink is created; existing symlinks are replaced in place.
 After installing, all skills appear in OpenCode's available skills list, and the
 `harness-*` and specialist agent types become available to the Task tool.
 
+### Claude Code
+
+```bash
+./install.sh --claude
+```
+
+The same repo also drives [Claude Code](https://claude.com/claude-code).
+opencode's files stay the source of truth, and `claude/` holds only what
+Claude Code needs on top of them:
+
+| Path | What it is |
+|------|------------|
+| `claude/build.py` | Generates the two files below from the opencode sources. `tests/test_claude_build.py` fails when they are out of date. |
+| `claude/agents/*.md` | **Generated** from `agents/*.md`: frontmatter mapped (`permission` → `disallowedTools`, pins from frontmatter or `opencode.jsonc`), `Task`/`task_id` → `Agent`/`SendMessage`. |
+| `claude/CLAUDE.md` | **Generated**: the principles section of `AGENTS.md` + `claude/routing.md` (the roster in Claude Code names). |
+| `claude/routing.md` | Hand-written model routing for Claude Code. |
+| `claude/settings.json` | Merged into `~/.claude/settings.json`: denies `codegraph init/index/uninit`, sets subagent depth 2. |
+| `claude/mcp.sh` | Registers every MCP server from `opencode.jsonc` (user scope) and ai-scribe's personal `opencode.json` (local scope). Skips servers that exist. No secrets in config. |
+| `claude/install.sh` | Runs all of the above; links `skills/*`, any opencode-only skill, the agents and `CLAUDE.md` into `~/.claude/`. |
+
+After editing an agent, a pin, `AGENTS.md` or `claude/routing.md`, re-run
+`./install.sh --claude` (or just `python3 claude/build.py`). Then run `/mcp`
+in Claude Code to sign in to the OAuth servers.
+
+Claude Code differences from the opencode setup:
+
+- **Per-agent MCP scoping is generated** from the `opencode.jsonc` allowlists into each agent's `disallowedTools`. Claude Code defers MCP tool schemas until a
+  tool is used, so the scoping now limits which (often write-capable) servers
+  an agent may call rather than saving tokens.
+- **`harness-pipeline`'s spawn allowlist is prompt-enforced.** Claude Code
+  ignores `Agent(type)` restrictions inside subagents. Leaf roles still cannot
+  spawn (`disallowedTools: Agent`), so depth stays at 2. The `create-harness`
+  skill's "Running under Claude Code" section has the full mapping.
+- **Not ported:** the `mask-home` plugin (Claude Code has no hook that
+  rewrites the system prompt or built-in tool output) and
+  `opencode-claude-auth` (not needed).
+- **Supermemory (ai-scribe only)** lives outside this repo, like the opencode
+  side: the `claude()` function in `~/.zshrc` loads a pinned copy of
+  `supermemoryai/claude-supermemory` from `~/.claude/vendor/claude-supermemory`
+  with `--plugin-dir`, only in ai-scribe checkouts and worktrees, using the
+  Keychain key and the shared `ai-scribe` container that opencode-supermemory
+  also writes to.
+
 ## Usage
 
 The harness activates automatically when you ask OpenCode to do something that matches the skill's trigger patterns:
@@ -238,7 +281,7 @@ OpenCode:
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PR_AGENT_MODEL` | No | `anthropic/claude-opus-4-6` | LLM model |
+| `PR_AGENT_MODEL` | No | `anthropic/claude-opus-5-5` | LLM model |
 | `OPENAI_KEY` | If using OpenAI | - | OpenAI API key |
 | `ANTHROPIC_KEY` | If using Claude | - | Anthropic API key |
 

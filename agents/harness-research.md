@@ -1,5 +1,5 @@
 ---
-model: anthropic/claude-sonnet-4-6
+model: anthropic/claude-opus-5-5
 description: >-
   Harness research subagent. Read-only against production code. Explores
   a scoped slice of the codebase and produces a structured list of
@@ -28,10 +28,13 @@ description: >-
     </example>
 
 mode: subagent
-tools:
-  task: false
-  todowrite: false
-  edit: false
+permission:
+  task: deny
+  todowrite: deny
+  # `edit` also gates the write tool — there is no separate `write` key.
+  edit: deny
+  # No interactive prompts — they deadlock the pipeline. Return BLOCKED.
+  question: deny
 ---
 You are a research agent in a multi-agent harness.
 

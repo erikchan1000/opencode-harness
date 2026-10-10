@@ -107,20 +107,34 @@ The roles run on a deliberate two-tier model split, set via `model:`
 
 | Role(s) | Model | Rationale |
 |---------|-------|-----------|
-| Implementation (`harness-impl`), Test (`harness-test`) | `anthropic/claude-opus-5` | Code-writing roles: strongest implementation model (2026-07-17: switched impl from sonnet-4-6 per user preference) |
-| Review (`harness-review`), Debug (`harness-debug`), Recovery (`harness-recovery`) | `anthropic/claude-opus-5` | Judgment roles: security/correctness review, root-cause analysis, and diagnosing *why an agent failed* — the three hardest reasoning jobs in the loop |
-| Research (`harness-research`), Prompt (`harness-prompt`), Pipeline (`harness-pipeline`) | `anthropic/claude-sonnet-4-6` | Structured-output roles: scoped exploration, templating a finding into a prompt, and sequencing gates from explicit PASS/NEEDS_FIX verdicts. None needs frontier reasoning; all three are high-volume, so this is where the cost lives |
-| Orchestration (parent agent) | Run the parent session on `anthropic/claude-opus-5` | The orchestrator makes the retry/defer/escalate decisions; use the strongest model |
+| Test (`harness-test`) | `anthropic/claude-opus-5-5` | Code-writing role: strongest implementation model |
+| Implementation (`harness-impl`) | `anthropic/claude-sonnet-5-5` | 2026-09-23: temporarily back from opus-5-5 — every impl invocation on that pin was rejected by the provider content filter pre-output (8/8 findings, docs-only included) while test/research on the same pin ran clean. Revert when a probe succeeds; see the comment in `agents/harness-impl.md`. |
+| Review (`harness-review`), Debug (`harness-debug`), Recovery (`harness-recovery`) | `anthropic/claude-opus-5-5` | Judgment roles: security/correctness review, root-cause analysis, and diagnosing *why an agent failed* — the three hardest reasoning jobs in the loop |
+| Research (`harness-research`) | `anthropic/claude-opus-5-5` | Findings quality gates every downstream phase (2026-08-22: upgraded from sonnet-4-6 per user preference) |
+| Prompt (`harness-prompt`), Pipeline (`harness-pipeline`) | `anthropic/claude-sonnet-5-5` | Structured-output roles: templating a finding into a prompt, and sequencing gates from explicit PASS/NEEDS_FIX verdicts. Neither needs frontier reasoning; both are high-volume, so this is where the cost lives |
+| Orchestration (parent agent) | Run the parent session on `anthropic/claude-opus-5-5` | The orchestrator makes the retry/defer/escalate decisions; use the strongest model |
 
-Research is the one to resist downgrading further. It is tempting to put it
-on Haiku alongside the built-in `explore` agent, but research does more than
-search — it assigns severity and declares `depends_on` / `touches_files`,
-which is the input the DAG builder schedules from. Bad findings poison every
-downstream phase, so Sonnet is the floor.
+Research is the one to resist downgrading. It is tempting to put it on Haiku
+alongside the built-in `explore` agent, but research does more than search —
+it assigns severity and declares `depends_on` / `touches_files`, which is the
+input the DAG builder schedules from. Bad findings poison every downstream
+phase: a missed bug is never fixed, and a wrong `touches_files` silently
+schedules two conflicting diffs into the same wave. Sonnet is the floor and
+Opus is the current setting.
+
+Note that research is also high-volume — three-to-five parallel subagents per
+harness run, each reading a lot of code. It is the most expensive Opus slot in
+the roster. If cost becomes the binding constraint, this is the first place to
+look, but downgrade it deliberately rather than by drift.
 
 When updating model assignments, edit the frontmatter of the
 corresponding `~/.config/opencode/agents/harness-*.md` files and keep
-this table in sync.
+this table in sync. Two pins live outside the harness agents and move with
+the Opus rows: the orchestration row mirrors the `build` pin in the global
+`opencode.jsonc`, and PR-Agent (which `harness-review` drives) reviews
+with the pr-review skill's `DEFAULT_MODEL` in `scripts/run_review.py`.
+2026-09-22: every Opus pin moved from `claude-opus-5` to `claude-opus-5-5`.
+2026-10-08: every Sonnet pin moved from `claude-sonnet-5` to `claude-sonnet-5-5`.
 
 The **recovery** role is the one most teams skip. It is what turns "the
 implementation agent timed out" from a dead end into "feed the truncated
@@ -137,6 +151,41 @@ Task(subagent_type: "harness-research",
 
 The Task tool returns a `task_id` that can be used to **resume** the
 same agent session later — this enables warm retries (see Phase 3).
+
+### Running under Claude Code
+
+This skill and its agents are written in opencode terms. Under Claude Code
+(agents installed at `~/.claude/agents/harness-*.md` by
+`~/opencode-harness/install.sh --claude`), translate as follows; everything
+else — phases, roles, templates, the DAG builder, the review and test gates
+— is unchanged.
+
+| opencode | Claude Code |
+|----------|-------------|
+| `Task(subagent_type: "X", prompt: …)` | Agent tool, `subagent_type: "X"`, same prompt. Several calls in one message run in parallel (up to 20 at once). |
+| Warm retry: `Task(…, task_id: <id>, prompt: …)` | `SendMessage` with `to: <agent ID>` (the ID the Agent call returned) and the retry instructions as `message`. Record the agent ID wherever this skill says to save a `task_id`. |
+| `"subagent_depth": 2` in `opencode.jsonc` | `CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=2` in `~/.claude/settings.json` `env`. |
+| `harness-pipeline`'s `task` allowlist (impl/test/debug only) | **Not enforced**: Claude Code ignores an `Agent(type)` allowlist inside a subagent. The runner's prompt carries the rule, and every leaf role has `Agent` in `disallowedTools`, so nothing nests past depth 2. |
+| `task: deny`, `edit: deny`, `todowrite: deny` | `disallowedTools: Agent` / `Edit, Write, NotebookEdit` / `TodoWrite` |
+| `question: deny` | Nothing to set: Claude Code never gives subagents `AskUserQuestion`. |
+| "no concurrency cap" | Claude Code caps concurrent subagents at 20 (`CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS`); a wider wave queues. |
+| `general` subagent (review fallback) | `general-purpose` |
+| Task calls block until the child returns | Agent spawns may run **in the background**. Interactively, a runner still waits for its background children before it finishes. **Headless (`claude -p`, Agent SDK) it does not**: the runner returns its interim text as its verdict, and its children report to the main conversation instead (observed 2026-10-08). For a headless harness run, launch with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`, which makes every spawn foreground (verified: orchestrator → `harness-pipeline` → leaf returned inline). It also disables background Bash, so set it for that process only, not in settings. |
+| Per-agent MCP allowlists in `opencode.jsonc` | Generated into each agent's `disallowedTools` as `mcp__<server>` (verified 2026-10-08: `harness-pipeline` saw only paper; `harness-debug` only codegraph, brave-search, chrome-devtools, dart, playwright). |
+
+Precondition 1 under Claude Code is instead:
+
+```bash
+grep -o '"CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": *"[0-9]*"' ~/.claude/settings.json
+```
+
+Expect `2`. Unset means Claude Code's default depth (3), which works but
+removes the backstop described above. `1` blocks the runners from spawning.
+
+Model pins: `~/.claude/agents/*.md` are generated from
+`~/opencode-harness/agents/*.md` by `claude/build.py`, so change a pin in
+the opencode agent file (and the table below), then re-run
+`./install.sh --claude`.
 
 ## Methodology — five-phase loop
 
@@ -372,6 +421,40 @@ budget, the orchestrator decides whether to (a) defer just that finding
 and proceed to the next wave with its dependents also deferred, or
 (b) abort for human input. Default is (a).
 
+### Wall-clock discipline (learned 2026-09-09, 15-finding / 4-wave run, 3h48m)
+
+The harness did not hang once, but it *looked* hung and half its time was
+duplicated test runs. Five rules, all cheap:
+
+1. **Announce before you wait.** Every time you dispatch runners, a review
+   gate, or a warm retry, emit one line of text first: what is running, how
+   many agents, and the expected duration (9 parallel runners ≈ 35–40 min;
+   a PR-Agent gate ≈ 6 min; a warm retry ≈ 15 min). A bare spinner for six
+   minutes got interrupted by the user while two healthy runners were
+   mid-flight. If interrupted: `git status` (partial diffs are on disk,
+   scratchpads are current), then resume the same `task_id` — never re-spawn.
+2. **Verify once per layer.** Test agent: new test file while iterating,
+   the touched area's directory ONCE at the end. Runner: trust that log, or
+   re-run the single new file. Orchestrator: full suites exactly once per
+   wave, right before the wave commit. Observed anti-pattern: one 2-minute
+   Flutter directory suite ran 4–5× per wave across the three layers.
+3. **No revert-and-rerun mutation probes** against suites slower than ~30 s.
+   "Prove the test fails pre-fix" by reasoning from the diff. A probe that
+   edits the fix out, runs a 2-minute suite, restores, and runs again cost
+   13 minutes for three widget tests — and dirties the tree if interrupted.
+4. **Don't idle at the barrier.** When one straggler is >10 min behind the
+   rest of its wave, start prompt authoring for next-wave findings whose
+   `Depends on` are all DONE. Prompts write only to `plan/`; no collision.
+5. **Move recurring review findings into the impl prompt.** The review gate
+   caught the same class five times (resource release on every exit path;
+   controls left enabled during an async transition; an a11y node with no
+   action) → three review passes on one wave ≈ 45 min. When a wave's review
+   flags a class of bug, the prompt author for later waves gets that class
+   as an explicit checklist item.
+
+Repos may publish a suite-cost table in their `AGENTS.md` (ai-scribe does);
+pass it verbatim into every runner prompt.
+
 ### Review gate enforcement
 
 The review gate (Step 3c) uses `harness-review` which runs **PR-Agent**
@@ -390,6 +473,15 @@ for AI-powered code review. Key operational requirements:
    returned** — never per-finding. PR-Agent reviews the full PR diff,
    which is both cheaper and more useful than N reviews of the same
    diff from N different vantage points.
+
+   **Always pass `CONFIG__MAX_MODEL_TOKENS=400000`** (an env var the
+   review runner forwards to pr-agent). pr-agent's default
+   `max_model_tokens` is 32 000; a larger diff is silently pruned and the
+   run returns a confident score about whatever files survived. Observed
+   2026-09-09: a 57k-token diff scored 89/100 having dropped every focus
+   file. `PR_AGENT_MODEL_MAX_TOKENS` does NOT raise this cap. Ask the
+   review agent to confirm in its output that the focus files were in the
+   reviewed diff.
 
 3. **If PR-Agent is BLOCKED** (missing API key, network error, etc.),
    the orchestrator should fall back to a manual review using the

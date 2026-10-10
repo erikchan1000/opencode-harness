@@ -8,14 +8,23 @@ set -euo pipefail
 # Layout created in ~/.config/opencode/:
 #   skills/<name>   -> <repo>/skills/<name>       (every dir under skills/)
 #   agents/<name>.md -> <repo>/agents/<name>.md   (every file under agents/)
+#   plugins/<name>.ts -> <repo>/plugins/<name>.ts (every file under plugins/)
 #   AGENTS.md       -> <repo>/AGENTS.md
 #   opencode.jsonc  -> <repo>/opencode.jsonc
+#
+# `./install.sh --claude` installs into Claude Code instead: see
+# claude/install.sh.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ "${1:-}" = "--claude" ]; then
+    exec "$SCRIPT_DIR/claude/install.sh"
+fi
 
 CONFIG_DIR="$HOME/.config/opencode"
 SKILLS_DIR="$CONFIG_DIR/skills"
 AGENT_DIR="$CONFIG_DIR/agents"
+PLUGIN_DIR="$CONFIG_DIR/plugins"
 
 TS="$(date +%Y%m%d-%H%M%S)"
 
@@ -58,6 +67,15 @@ for agent_file in "$SCRIPT_DIR"/agents/*.md; do
     agent_count=$((agent_count + 1))
 done
 
+# --- Plugins ---
+mkdir -p "$PLUGIN_DIR"
+plugin_count=0
+for plugin_file in "$SCRIPT_DIR"/plugins/*.ts; do
+    name="$(basename "$plugin_file")"
+    link "$plugin_file" "$PLUGIN_DIR/$name"
+    plugin_count=$((plugin_count + 1))
+done
+
 # --- Top-level config files ---
 link "$SCRIPT_DIR/AGENTS.md"      "$CONFIG_DIR/AGENTS.md"
 link "$SCRIPT_DIR/opencode.jsonc" "$CONFIG_DIR/opencode.jsonc"
@@ -66,6 +84,7 @@ echo ""
 echo "Done. Installed:"
 echo "  - $skill_count skills  -> $SKILLS_DIR/"
 echo "  - $agent_count agents  -> $AGENT_DIR/"
+echo "  - $plugin_count plugins -> $PLUGIN_DIR/"
 echo "  - AGENTS.md, opencode.jsonc -> $CONFIG_DIR/"
 echo ""
 echo "Verify: restart OpenCode and check the available skills list."

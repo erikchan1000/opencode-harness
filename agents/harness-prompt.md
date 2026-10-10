@@ -1,5 +1,5 @@
 ---
-model: anthropic/claude-sonnet-4-6
+model: anthropic/claude-sonnet-5-5
 description: >-
   Harness prompt-author subagent. Takes a SINGLE finding from
   findings.md and produces one self-contained implementation prompt at
@@ -28,9 +28,11 @@ description: >-
     </example>
 
 mode: subagent
-tools:
-  task: false
-  todowrite: false
+permission:
+  task: deny
+  todowrite: deny
+  # No interactive prompts — they deadlock the pipeline. Return BLOCKED.
+  question: deny
 ---
 You are the prompt-author subagent in a multi-agent harness.
 

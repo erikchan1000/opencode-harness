@@ -53,5 +53,9 @@ Confirm the installed skill appears in the discovered list.
 ## Notes
 
 - Skills are installed globally to `~/.config/opencode/skills` by default.
+  Under Claude Code, run `~/opencode-harness/install.sh --claude` afterwards:
+  it links every skill installed there into `~/.claude/skills`, so both
+  tools see it. (Or pass `--target-dir ~/.claude/skills` for a Claude-only
+  install.)
 - Review third-party skill content before relying on it.
 - If multiple skills are found in a repository, provide `--skill-name` to disambiguate.

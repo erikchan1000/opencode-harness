@@ -65,11 +65,47 @@ Non-negotiables. List the rules the agent must NOT break.
 - Do not introduce new dependencies; use what's in pubspec.yaml.
 - Comments must follow `<repo conventions document>`.
 
+<!--
+Domain checklists — INCLUDE the matching block whenever the finding touches
+that domain. These are the bug classes the review gate keeps catching after
+impl+test have both passed (5× in one run, 2026-09-09); putting them here is
+~45 min cheaper than finding them in review.
+-->
+
+<!-- If the change acquires a resource (MediaStream/MediaRecorder, file
+handle, socket, subscription, timer, lock): -->
+- Every exit path releases the resource: success, user cancel, error
+  callback, component unmount, AND unmount/cancel while the acquisition
+  is still pending (the late-resolving promise must release what it just
+  got and return without touching state).
+- The acquire entry point is guarded by state: a second call while
+  acquiring/active must throw or no-op, never acquire a second instance.
+- Tests assert the release (spy on `track.stop()` / `close()` /
+  `unsubscribe()`), not just the state label.
+
+<!-- If the change has an async transition driven by a user control
+(stop/submit/save/confirm): -->
+- The control that triggers the transition is disabled (and re-labelled)
+  from the moment it fires until the transition settles; a second click
+  during the in-flight window cannot re-enter and cannot discard the
+  result of the first.
+- A rejection arriving after a result was already stored does not clear
+  the stored result.
+
+<!-- If the change adds or edits an accessible control (Flutter
+`Semantics`, ARIA role="button"): -->
+- The node exposes its action (`onTap:` / real click handler), reports
+  `enabled` consistently with the visual disabled state, and — if
+  `excludeSemantics`/`aria-hidden` is used on children — carries the full
+  label itself. Tests assert `hasTapAction` / the role's action.
+
 ## Verification
 
 <!--
-How the impl agent confirms it's done. The unit-test agent runs after
-this, but the impl agent should at least sanity-check.
+How the impl agent confirms it's done. Keep it NARROW: the single new
+test file and static analysis. The test agent runs the area directory once;
+the orchestrator runs the full suite once per wave. Do not list the full
+project suite here.
 -->
 
 - [ ] `flutter analyze` clean for `<scope>`

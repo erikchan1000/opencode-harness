@@ -1,41 +1,281 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "permission": "allow",
+  // MCP tool scoping (2026-10-05). Everything stays allowed, as before, except
+  // MCP tools: each server's tools are hidden from every agent here and
+  // re-allowed per agent in the `agent` block below. A tool whose last
+  // matching rule is `deny` is dropped from the request entirely, so its
+  // schema is not sent.
+  //
+  // Why: every turn re-sends every tool schema. Measured on ai-scribe
+  // sessions over the 7 days before this change (opencode.db): ~190k turns,
+  // and the first turn of each session was already ~130k tokens (it was ~85k
+  // in early September, before Sheets/Comfy/etc. were added). That fixed
+  // prefix is re-read from cache on every turn — about a third of spend.
+  // harness-impl, coder, harness-test and harness-review called MCP tools in
+  // <=0.3% of their tool calls. The per-agent allowlists below come from
+  // 30 days of actual MCP calls per agent; low-volume roles get a small
+  // role-based set instead.
+  //
+  // Schema cost per turn for an agent that can see the server (measured
+  // 2026-10-05, extra first-turn tokens, Haiku tokenizer): linear 25.9k,
+  // paper 13.5k, brave-search 10.6k, chrome-devtools 7.3k, playwright 5.0k,
+  // dart 4.9k, mobbin 3.5k, codegraph 2.2k, context7 0.9k. An allow costs
+  // (agent turns/week x tokens): e.g. brave on harness-impl was ~68k turns x
+  // 10.6k = ~$145/week for ~10 sessions a month that searched, so the
+  // implementation and test roles use webfetch/context7 instead.
+  //
+  // Adding an MCP server: add a `<name>_*: deny` line here, then allow it on
+  // `build`, `plan` and any agent that needs it. A server missing from this
+  // list is visible to every agent. Tool names are `<server>_<tool>`, so the
+  // glob covers the whole server. Personal override: re-allow a server for an
+  // agent in a gitignored project `opencode.json` (deep-merged over this).
+  "permission": {
+    "*": "allow",
+    "linear_*": "deny",
+    "paper_*": "deny",
+    "comfy-cloud_*": "deny",
+    "google-sheets_*": "deny",
+    "brave-search_*": "deny",
+    "mobbin_*": "deny",
+    "figma_*": "deny",
+    "context7_*": "deny",
+    "supermemory-docs_*": "deny",
+    "cloudflare_*": "deny",
+    "cbinsights_*": "deny",
+    // Defined in ai-scribe's personal, gitignored opencode.json (moved there
+    // 2026-10-06 from the tracked opencode.jsonc, which upstream stopped
+    // tracking):
+    "playwright_*": "deny",
+    "chrome-devtools_*": "deny",
+    "dart_*": "deny",
+    "stripe_*": "deny",
+    "telnyx_*": "deny",
+    // codegraph pilot (2026-10-05): defined only in ai-scribe's personal,
+    // gitignored opencode.json; allowed below for the agents that read code.
+    "codegraph_*": "deny",
+    // Index builds take minutes and ~2.4 GB of RAM. Agents must not start
+    // them: parallel harness agents would stack builds and swap the laptop.
+    // Builds go through ~/.config/opencode/scripts/codegraph-pilot.sh, which
+    // queues them one at a time and refuses the main checkout.
+    "bash": {
+      "*": "allow",
+      "codegraph init*": "deny",
+      "codegraph index*": "deny",
+      "codegraph uninit*": "deny"
+    }
+  },
   "instructions": ["/Users/erikchan/.config/opencode/AGENTS.md"],
   // Allow ONE level of subagent nesting (default is 1 = none). This exists
   // solely so `harness-pipeline` can fan out to harness-impl/review/test/
   // debug, keeping per-finding gate chatter out of the orchestrator's
   // context. Depth accounting: orchestrator=0, pipeline runner=1, leaf
-  // roles=2. Every leaf harness-* agent keeps `task: false`, so depth 2 is
-  // self-limiting — nothing can spawn a third level even by accident.
+  // roles=2. Every leaf harness-* agent keeps `permission.task: deny`, so
+  // depth 2 is self-limiting — nothing can spawn a third level even by
+  // accident. (Was `tools.task: false` until the 2026-08-22 migration off
+  // the deprecated `tools` field; `permission` is the supported form.)
   //
   // Do NOT raise this to 3+ without also capping fan-out: there is no
   // concurrency limit in opencode, so nesting multiplies rather than adds
   // (6 findings x 4 gates x N = runaway parallel opus sessions).
   "subagent_depth": 2,
-  // Tracks AI coding activity (files, lines, time) to your WakaTime
-  // dashboard. Requires an API key in ~/.wakatime.cfg. The plugin
-  // auto-downloads wakatime-cli on first run.
-  "plugin": ["opencode-wakatime"],
   // Strength-based model routing ("fusion"): the primary `build` agent
   // orchestrates and delegates each task to the model best suited for it.
   // Specialist subagents (coder, deep-reasoner) keep their prompts in
   // agent/*.md; their model overrides live below so all routing is in one
-  // place. Routing rules are documented in AGENTS.md.
+  // place. Routing rules and the roster (which model each agent runs) are
+  // documented in AGENTS.md — update that roster in the same change as any
+  // pin below.
   "agent": {
     // Orchestrator + design + planning. Strongest reasoning model so it
     // makes good routing decisions and handles architecture itself.
-    "build": { "model": "anthropic/claude-opus-5" },
+    // Human-facing, so it keeps every MCP server (see `permission` above).
+    "build": {
+      "model": "anthropic/claude-opus-5-5",
+      "permission": {
+        "codegraph_*": "allow",
+        "linear_*": "allow",
+        "paper_*": "allow",
+        "comfy-cloud_*": "allow",
+        "google-sheets_*": "allow",
+        "brave-search_*": "allow",
+        "mobbin_*": "allow",
+        "figma_*": "allow",
+        "context7_*": "allow",
+        "supermemory-docs_*": "allow",
+        "cloudflare_*": "allow",
+        "cbinsights_*": "allow",
+        "playwright_*": "allow",
+        "chrome-devtools_*": "allow",
+        "dart_*": "allow",
+        "stripe_*": "allow",
+        "telnyx_*": "allow"
+      }
+    },
+    // Built-in primary agent; human-facing like `build`, same MCP set.
+    "plan": {
+      "permission": {
+        "codegraph_*": "allow",
+        "linear_*": "allow",
+        "paper_*": "allow",
+        "comfy-cloud_*": "allow",
+        "google-sheets_*": "allow",
+        "brave-search_*": "allow",
+        "mobbin_*": "allow",
+        "figma_*": "allow",
+        "context7_*": "allow",
+        "supermemory-docs_*": "allow",
+        "cloudflare_*": "allow",
+        "cbinsights_*": "allow",
+        "playwright_*": "allow",
+        "chrome-devtools_*": "allow",
+        "dart_*": "allow",
+        "stripe_*": "allow",
+        "telnyx_*": "allow"
+      }
+    },
     // Balanced, lower-cost workhorse for multi-step general tasks.
-    "general": { "model": "anthropic/claude-sonnet-4-6" },
-    // Fast, cheap model for codebase search and navigation.
-    "explore": { "model": "anthropic/claude-haiku-4-5" },
+    //
+    // `question: false` on every subagent below: the question tool blocks
+    // awaiting human input, but a subagent's prompt renders in a transcript
+    // nobody is watching, so it deadlocks the caller — and, under a harness,
+    // the whole wave behind it. Observed 2026-08-22: harness-impl asked a
+    // clarifying question two levels deep and hung a run for 2h29m. Only the
+    // primary `build` agent talks to a human, so only it keeps the tool.
+    //
+    // MCP: the design/research workhorse (heaviest Paper, Linear and Brave
+    // user after `build`).
+    "general": {
+      "model": "anthropic/claude-sonnet-5-5",
+      "permission": {
+        "question": "deny",
+        "codegraph_*": "allow",
+        "paper_*": "allow",
+        "linear_*": "allow",
+        "brave-search_*": "allow",
+        "mobbin_*": "allow",
+        "playwright_*": "allow",
+        "chrome-devtools_*": "allow",
+        "context7_*": "allow"
+      }
+    },
+    // Fast, cheap model for codebase search and navigation. No MCP servers
+    // except codegraph: it never called one, and Haiku's 200k window was ~2/3
+    // full of tool schemas before it read a single file.
+    "explore": {
+      "model": "anthropic/claude-haiku-4-5",
+      "permission": { "question": "deny", "codegraph_*": "allow" }
+    },
     // Implementation specialist; prompt + rules in agent/coder.md. Moved off
     // openai/gpt-5.3-codex-spark after the OpenAI OAuth credential expired.
-    "coder": { "model": "anthropic/claude-sonnet-4-6" },
+    "coder": {
+      "model": "anthropic/claude-sonnet-5-5",
+      "permission": {
+        "codegraph_*": "allow",
+        "paper_*": "allow",
+        "dart_*": "allow",
+        "chrome-devtools_*": "allow",
+        "context7_*": "allow"
+      }
+    },
     // Deep-reasoning / debugging specialist; prompt in agent/deep-reasoner.md.
-    // Moved off openai/gpt-5.5-pro for the same reason.
-    "deep-reasoner": { "model": "anthropic/claude-opus-5" }
+    // Moved off openai/gpt-5.5-pro for the same reason. Now the same model
+    // as `build`, so it adds an isolated context, not model diversity
+    // (AGENTS.md routing rule 3).
+    "deep-reasoner": {
+      "model": "anthropic/claude-opus-5-5",
+      "permission": {
+        "codegraph_*": "allow",
+        "brave-search_*": "allow",
+        "linear_*": "allow",
+        "dart_*": "allow",
+        "paper_*": "allow"
+      }
+    },
+    // Harness and specialist roles: prompts, model pins and their other
+    // permissions live in agents/*.md and are deep-merged with these entries.
+    // Only the MCP allowlists live here, so the scoping is reviewable in one
+    // place. harness-recovery gets no MCP servers. codegraph goes to every
+    // role that reads code; harness-pipeline/-review/-recovery do not.
+    "harness-impl": {
+      "permission": {
+        "codegraph_*": "allow",
+        "dart_*": "allow",
+        "paper_*": "allow",
+        "context7_*": "allow",
+        "playwright_*": "allow"
+      }
+    },
+    "harness-pipeline": {
+      "permission": {
+        "paper_*": "allow"
+      }
+    },
+    "harness-prompt": {
+      "permission": {
+        "codegraph_*": "allow",
+        "paper_*": "allow",
+        "brave-search_*": "allow",
+        "linear_*": "allow",
+        "context7_*": "allow"
+      }
+    },
+    "harness-research": {
+      "permission": {
+        "codegraph_*": "allow",
+        "linear_*": "allow",
+        "paper_*": "allow",
+        "brave-search_*": "allow",
+        "mobbin_*": "allow"
+      }
+    },
+    "harness-review": {
+      "permission": {
+        "playwright_*": "allow",
+        "dart_*": "allow"
+      }
+    },
+    "harness-test": {
+      "permission": {
+        "codegraph_*": "allow",
+        "dart_*": "allow"
+      }
+    },
+    // Low volume (<0.1% of turns): role-based repro tools rather than usage.
+    "harness-debug": {
+      "permission": {
+        "codegraph_*": "allow",
+        "dart_*": "allow",
+        "playwright_*": "allow",
+        "chrome-devtools_*": "allow",
+        "brave-search_*": "allow"
+      }
+    },
+    "ehr-fhir-sync-architect": {
+      "permission": {
+        "codegraph_*": "allow",
+        "brave-search_*": "allow",
+        "context7_*": "allow"
+      }
+    },
+    "home-health-scribe-architect": {
+      "permission": {
+        "codegraph_*": "allow",
+        "brave-search_*": "allow",
+        "context7_*": "allow"
+      }
+    },
+    "scribe-test-engineer": {
+      "permission": {
+        "codegraph_*": "allow",
+        "dart_*": "allow"
+      }
+    },
+    // Traces where PHI flows; codegraph's call paths are that question.
+    "hipaa-privacy-reviewer": {
+      "permission": {
+        "codegraph_*": "allow"
+      }
+    }
   },
   "mcp": {
     "cloudflare": {
@@ -66,6 +306,77 @@
       "type": "local",
       "command": ["npx", "-y", "@upstash/context7-mcp"]
     },
+    // Supermemory product docs search (https://supermemory.ai/docs/agents-and-mcp).
+    // Read-only, public, no auth: searches Supermemory's documentation only.
+    // It can NOT read or write memories. That is the separate Memory MCP at
+    // mcp.supermemory.ai, deliberately not configured (it would bypass the
+    // ai-scribe guard proxy, Linear CHA-936).
+    "supermemory-docs": {
+      "type": "remote",
+      "url": "https://supermemory.ai/docs/mcp",
+      "enabled": true
+    },
+    // Issue tracking: Linear's official remote MCP (Streamable HTTP + OAuth
+    // 2.1 with dynamic client registration — no API key in this file). Tools
+    // find, create, and update issues/projects/comments.
+    //
+    // WRITE-CAPABLE against a real workspace: Linear has no sandbox tier, so
+    // "test credentials only" is not available. The read-only endpoint
+    // https://mcp.linear.app/mcp/readonly is the structural alternative if you
+    // ever want the write surface gone entirely.
+    //
+    // Authenticate once:  opencode mcp auth linear   (opens a browser)
+    // Verify:             opencode mcp list          →  "linear ✓ connected"
+    "linear": {
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp"
+    },
+    // Google Sheets: Google Workspace's official remote MCP server (Developer
+    // Preview). Tools: get_values, get_spreadsheet, update_values,
+    // update_formulas, update_spreadsheet, insert_dimension.
+    //
+    // WRITE-CAPABLE against real sheets: the `spreadsheets` scope is read +
+    // write on every sheet the signed-in account can open (no Drive-wide
+    // access). Never point it at a sheet holding PHI — anything it reads is
+    // sent to the model provider.
+    //
+    // Google has no dynamic client registration, so this uses a pre-registered
+    // Web OAuth client ("opencode Sheets MCP", GCP project ai-scribe-493106)
+    // whose redirect URI must be exactly opencode's fixed MCP callback,
+    // http://127.0.0.1:19876/mcp/oauth/callback. This repo is PUBLIC, so the
+    // client id/secret live in chmod-600 files outside it. opencode refuses to
+    // load the WHOLE config when a {file:...} target is missing — create both
+    // files before this block reaches a new machine.
+    //
+    // Sign in with `python3 ~/.config/opencode/google-sheets-mcp-login.py`, NOT
+    // `opencode mcp auth`: this server serves initialize/tools/list without a
+    // token and only returns 401 on tools/call, so `opencode mcp auth` reports
+    // success without ever running the browser flow (and `mcp list` shows
+    // "connected" either way). The script seeds opencode's auth store with an
+    // offline token; opencode refreshes it on 401 after that.
+    // The GCP project (228054605862) must also be enrolled in the Workspace
+    // Developer Preview Program, or every tool call returns an enrollment error.
+    // Verify: opencode mcp debug google-sheets  →  "Auth status: ✓ authenticated"
+    "google-sheets": {
+      "type": "remote",
+      "url": "https://sheetsmcp.googleapis.com/mcp/v1",
+      "oauth": {
+        "clientId": "{file:/Users/erikchan/.config/opencode/google-sheets-mcp-client-id}",
+        "clientSecret": "{file:/Users/erikchan/.config/opencode/google-sheets-mcp-client-secret}",
+        "scope": "https://www.googleapis.com/auth/spreadsheets"
+      }
+    },
+    // Design canvas: Paper (paper.design) — HTML/CSS-native design tool.
+    // The MCP server is served by the Paper Desktop app (installed via
+    // `brew install --cask paper-design`) and starts automatically when a
+    // file is open in the app; it is READ + WRITE against whatever file is
+    // currently open, so keep the intended file focused before prompting.
+    // Free tier: 100 tool calls/week. Docs: https://paper.design/docs/mcp
+    // Verify: open a file in Paper, then `opencode mcp list` → "paper ✓".
+    "paper": {
+      "type": "remote",
+      "url": "http://127.0.0.1:29979/mcp"
+    },
     // Web search: Brave's official MCP server (web/news/image search,
     // summaries). Free tier: 2k queries/mo. The API key lives OUTSIDE this
     // tracked repo in a chmod-600 local file, injected via {file:...}.
@@ -75,6 +386,53 @@
       "environment": {
         "BRAVE_API_KEY": "{file:/Users/erikchan/.config/opencode/brave-api-key}"
       }
+    },
+    // Comfy Cloud: Comfy's official hosted MCP. Searches templates, nodes and
+    // models, uploads inputs, runs ComfyUI workflows on Comfy Cloud GPUs (e.g.
+    // SCAIL-2 character replacement) and returns download commands for outputs.
+    // Discovery is free; RUNNING workflows needs an active Comfy Cloud
+    // subscription (a credit balance alone is not enough). Docs:
+    // https://docs.comfy.org/agent-tools/mcp
+    //
+    // Streamable HTTP + OAuth with dynamic client registration (checked
+    // 2026-10-03: 401 + WWW-Authenticate on initialize, registration_endpoint
+    // at https://cloud.comfy.org/oauth/register), so no API key in this file.
+    //
+    // Authenticate once:  opencode mcp auth comfy-cloud   (opens a browser)
+    // Verify:             opencode mcp list               →  "comfy-cloud ✓ connected"
+    "comfy-cloud": {
+      "type": "remote",
+      "url": "https://cloud.comfy.org/mcp"
+    },
+    // CB Insights: official hosted MCP. Private-company and market data:
+    // profiles, funding, deals, cap tables, competitors, analyst ratings,
+    // market maps, ChatCBI. Needs a CB Insights subscription or trial login.
+    // Docs: https://api-docs.cbinsights.com/portal/docs/mcp-connectors
+    //
+    // Streamable HTTP + OAuth with dynamic client registration (checked
+    // 2026-10-07: 401 + WWW-Authenticate on initialize, registration_endpoint
+    // at https://mcp.cbinsights.com/register), so no API key in this file.
+    // The server also accepts CB Insights API client_id/secret through the
+    // client_credentials grant at https://mcp.cbinsights.com/token.
+    //
+    // 37 tools on the trial account (the docs list 44). Six are WRITE-CAPABLE
+    // against your own CB Insights watchlists: create_watchlist,
+    // add_watchlist_orgs, add_watchlist_column, rename_watchlist,
+    // rename_watchlist_column, set_watchlist_cell_values. The rest are
+    // read-only. Quota from its get_usage tool (2026-10-07, trial): 500 calls
+    // a day per user, 10,000 a year per team.
+    //
+    // Schema cost: ~120 KB of tool definitions, an estimated 27-36k tokens per
+    // turn (Linear's 85 KB measured 25.9k), the heaviest server here. So it is
+    // allowed on build and plan only, like Comfy, Sheets and Cloudflare.
+    //
+    // Authenticate once:  opencode mcp auth cbinsights   (opens a browser)
+    // Verify:             opencode mcp list              →  "cbinsights ✓ connected"
+    // When the subscription or trial lapses, set "enabled": false.
+    "cbinsights": {
+      "type": "remote",
+      "url": "https://mcp.cbinsights.com"
     }
-  }
+  },
+    "plugin": ["opencode-claude-auth@latest"]
 }

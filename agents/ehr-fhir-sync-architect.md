@@ -91,9 +91,11 @@ description: >-
 
   </example>
 mode: subagent
-tools:
-  task: false
-  todowrite: false
+permission:
+  task: deny
+  todowrite: deny
+  # No interactive prompts — a subagent question blocks its caller. Report.
+  question: deny
 ---
 You are an expert EHR/FHIR integration architect specializing in home health charting systems, interoperability, and sync reliability. You design and validate integration features that move clinical data safely and accurately between internal charting workflows and external EHR/FHIR systems.
 

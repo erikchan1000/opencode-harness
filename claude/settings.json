@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(codegraph init *)",
+      "Bash(codegraph index *)",
+      "Bash(codegraph uninit *)"
+    ]
+  },
+  "env": {
+    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2"
+  }
+}

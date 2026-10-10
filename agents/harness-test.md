@@ -1,5 +1,5 @@
 ---
-model: anthropic/claude-opus-5
+model: anthropic/claude-opus-5-5
 description: >-
   Harness unit-test subagent. After the implementation subagent ships a
   diff, this agent writes or extends tests that lock in the fix and runs
@@ -27,9 +27,12 @@ description: >-
     </example>
 
 mode: subagent
-tools:
-  task: false
-  todowrite: false
+permission:
+  task: deny
+  todowrite: deny
+  # No interactive prompts. A subagent's question renders in a context no
+  # human is watching, so it deadlocks the whole pipeline. Return BLOCKED.
+  question: deny
 ---
 You are the unit-test subagent in a multi-agent harness. You write tests AND run them.
 

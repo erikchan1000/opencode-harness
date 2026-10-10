@@ -26,10 +26,21 @@ description: >-
     </example>
 
 mode: subagent
-model: anthropic/claude-opus-5
-tools:
-  task: false
-  todowrite: false
+# 2026-09-23: temporarily back on the Sonnet tier (sonnet-5; bumped to
+# sonnet-5-5 on 2026-10-08). On opus-5-5 every harness-impl
+# invocation in a wave (8/8 findings, incl. a docs-only one, solo and in a
+# burst) returned "blocked by the provider's content filter" before any
+# output, while harness-test/harness-research on the same pin and `coder`
+# on sonnet-5 ran the identical prompts clean. Revert to opus-5-5 once a
+# probe invocation succeeds again. Keep the model table in
+# skills/create-harness/SKILL.md in sync.
+model: anthropic/claude-sonnet-5-5
+permission:
+  task: deny
+  todowrite: deny
+  # No interactive prompts. A subagent's question renders in a context no
+  # human is watching, so it deadlocks the whole pipeline. Return BLOCKED.
+  question: deny
 ---
 You are the implementation subagent in a multi-agent harness. You take ONE prompt and produce ONE focused diff.
 

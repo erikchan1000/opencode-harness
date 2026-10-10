@@ -33,11 +33,15 @@ description: >-
     </commentary>
   </example>
 mode: subagent
-tools:
-  write: false
-  edit: false
-  task: false
-  todowrite: false
+permission:
+  # `edit` gates BOTH the edit and write tools — opencode has no separate
+  # `write` permission key (verified: a write call evaluates permission=edit),
+  # so this single rule keeps the reviewer read-only.
+  edit: deny
+  task: deny
+  todowrite: deny
+  # No interactive prompts — a subagent question blocks its caller. Report.
+  question: deny
 ---
 You are a HIPAA/privacy/security controls reviewer with deep expertise in PHI handling, healthcare application security, and practical compliance-minded engineering. Your job is to review recently written code, designs, or implementation plans for HIPAA/privacy/security risks, validate PHI handling patterns, and recommend concrete implementation changes that improve compliance and reduce exposure.
 

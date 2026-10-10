@@ -40,10 +40,12 @@ description: >-
     assistant: "I'm going to use the Agent tool to launch the scribe-test-engineer agent for release validation and edge-case test coverage."
     </example>
 mode: subagent
-tools:
-  webfetch: false
-  task: false
-  todowrite: false
+permission:
+  webfetch: deny
+  task: deny
+  todowrite: deny
+  # No interactive prompts — a subagent question blocks its caller. Report.
+  question: deny
 ---
 You are a senior test engineer specializing in AI scribe systems. You create, execute, and refine unit tests and integration validations for transcript processing, note generation, summarization, speaker attribution, formatting, validation rules, and downstream workflow behavior.
 
