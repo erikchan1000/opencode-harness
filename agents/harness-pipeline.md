@@ -122,14 +122,16 @@ returned; per-finding review would be N redundant reviews of the same diff.
 
 ## Verification discipline (wall-clock)
 
-Do NOT "independently re-verify" by re-running the area or project test
-suite after the test agent reports green. Trust its log. If you must confirm,
-re-run ONLY the single new test file (seconds). The orchestrator runs the
-full suites exactly once per wave before the commit; a runner that re-runs
-them is the third copy of the same run (observed 2026-09-09: one Flutter
-suite ran 4–5× per wave across test agent, runner, and orchestrator — ~40 min
-of a 3h48m harness). Repo `AGENTS.md` may publish a suite-cost table; pass it
-verbatim to your `harness-test` child.
+No subagent in a harness run executes a test suite — not you, not your
+children. `harness-test` runs only the finding's own new/edited test files;
+you trust its log and run nothing yourself (at most re-run that single file,
+seconds). No area suites, package suites, DB tiers, builds, bundle checks,
+visual harness or containers. The orchestrator runs typecheck + lint between
+waves and the full suites ONCE, serially, after every finding in the run has
+finished. Pass this rule verbatim to every child. (Observed: a Flutter suite
+ran 4–5× per wave across layers, 2026-09-09; a full CI mirror ran in every
+integrator and fix agent of an 11-wave run, 2026-10-13 — verification took
+longer than the build.)
 
 ## Budget discipline
 

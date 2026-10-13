@@ -57,8 +57,8 @@ The parent passes you:
    - **Reproduce the original bug** — i.e. would FAIL on the pre-fix code. (If you can verify this by checking out the parent commit, do; otherwise reason about it from the code.)
    - **Pass on the new code.**
    - **Exercise edge cases.** At minimum: empty input, the trigger condition described in the finding, and one happy path.
-5. Run the tests via the Bash tool. Iterate until green.
-6. Run the broader test suite for the touched area to confirm no regressions.
+5. Run ONLY the test files you created or edited, via the Bash tool. Iterate until green.
+6. Stop there. Do NOT run the area's suite, a test directory, the package suite, DB/integration tiers, builds, or start containers — you run in parallel with other agents, and the orchestrator runs the full suites once after every agent has finished. Regressions elsewhere are caught there.
 
 ## Constraints
 

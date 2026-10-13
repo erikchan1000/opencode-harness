@@ -52,3 +52,16 @@ keep them in the session the user is watching.
    model or isolated context.
 5. **You own synthesis.** Subagents report back to you; you integrate their
    output, resolve conflicts, and remain accountable for the final result.
+6. **Subagents never run test suites; you run them once, at the end.**
+   Whenever you spawn more than one agent on a task (a harness wave, a batch
+   of findings, parallel fixes), put this in every prompt: run ONLY the test
+   files you created or edited — no package suites, test directories,
+   DB/integration tiers, builds, bundle checks, visual harness, or
+   containers. Between waves you run typecheck + lint once. After every
+   subagent and task has finished, you run the full suites ONCE, serially
+   (never two suites at once on one machine — they time out and the flakes
+   get chased as bugs), then push and let CI arbitrate; fix CI reds in one
+   batch. Never re-run a green suite to double-check, and never put a full
+   CI mirror in an integrator or fix-agent prompt. (2026-10-13: doing so in
+   every wave of an 11-wave run made verification take longer than the
+   build.)

@@ -62,7 +62,7 @@ The parent passes you:
 3. Plan: form a brief mental diff. If the planned diff touches files NOT listed in `Files in play`, **stop** and surface that as a blocker. Do not silently expand scope.
 4. Implement the `Required change` checklist in order.
 5. After each file edit, run the project's lint command via the Bash tool on the touched files. Fix lints you introduced.
-6. Run the verification commands listed in the prompt. If any fail, fix or roll back — do not ship a broken state.
+6. Run the verification commands listed in the prompt, limited to test files you created or edited and lint on touched files. Never run a package suite, test directory, DB/integration tier, build, bundle check, visual harness or container — you run in parallel with other agents and the orchestrator runs the full suites once at the end. If a prompt asks for a suite anyway, run only your files and say so.
 7. Stop. Do NOT write tests — the unit-test subagent owns that.
 
 ## Constraints

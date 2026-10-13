@@ -433,11 +433,29 @@ duplicated test runs. Five rules, all cheap:
    minutes got interrupted by the user while two healthy runners were
    mid-flight. If interrupted: `git status` (partial diffs are on disk,
    scratchpads are current), then resume the same `task_id` — never re-spawn.
-2. **Verify once per layer.** Test agent: new test file while iterating,
-   the touched area's directory ONCE at the end. Runner: trust that log, or
-   re-run the single new file. Orchestrator: full suites exactly once per
-   wave, right before the wave commit. Observed anti-pattern: one 2-minute
-   Flutter directory suite ran 4–5× per wave across the three layers.
+2. **Subagents never run test suites; the orchestrator runs them once, at
+   the end.** (Learned 2026-10-13, an 11-wave / ~230-finding run where
+   verification took longer than the build.) Every subagent in a parallel
+   run — impl, test, runner, integrator, fix agent, plain `coder` — runs
+   ONLY the test files it created or edited, plus nothing else. Forbidden
+   inside a subagent: a package's whole suite or a test directory, DB /
+   integration tiers, starting containers, builds, bundle checks, the
+   visual harness, and package-wide typechecks. Put this rule verbatim in
+   every subagent prompt; agents otherwise "helpfully" run everything.
+   The orchestrator's ladder:
+   - **Between waves:** typecheck + lint once, plus the wave's new test
+     files — no full suites. Later waves build on earlier ones, so the
+     types must be green, but nothing more is needed to keep going.
+   - **Once all subagents and tasks are finished:** the full suites,
+     ONCE, serially (never two suites at once on one machine — parallel
+     suites time out and the flakes get chased as bugs), then push and let
+     CI arbitrate. A CI red is fixed in one batch, not one push per test.
+   - **Never** re-run a suite to "double-check" a green one, and never run
+     the full CI mirror per wave. Observed anti-patterns: one Flutter suite
+     ran 4–5× per wave across three layers (2026-09-09); a full CI mirror
+     (29k backend + 700 DB files + 24k web + 18k worker tests) ran in every
+     wave's integrator, again in every review-fix agent, then again in CI
+     (2026-10-13).
 3. **No revert-and-rerun mutation probes** against suites slower than ~30 s.
    "Prove the test fails pre-fix" by reasoning from the diff. A probe that
    edits the fix out, runs a 2-minute suite, restores, and runs again cost
@@ -500,10 +518,13 @@ for AI-powered code review. Key operational requirements:
 ### Test gate enforcement
 
 The test gate is **mandatory** for every finding pipeline, and it lives
-inside the pipeline runner (`harness-pipeline` step 3). Neither the
+inside the pipeline runner (`harness-pipeline` step 3). A "green test run"
+here means the finding's OWN new or edited test files — not the area's
+suite (see Wall-clock discipline rule 2; regressions elsewhere are caught by
+the orchestrator's single full-suite run at the end). Neither the
 orchestrator nor a runner may:
 
-- Mark a finding as "done" without a green test run
+- Mark a finding as "done" without a green run of its own test files
 - Skip the test step to "save time" — this creates false confidence
 - Move to the next wave while any finding in the current wave has
   impl done but tests not run
@@ -721,6 +742,8 @@ Before declaring the harness done:
       by default; ADR/CHANGELOG only if the repo requires them)
 - [ ] **Every finding has a test run logged** (green test output or
       documented exception for untestable findings like Terraform)
-- [ ] All tests pass; lints clean
+- [ ] The full suites ran ONCE, serially, by the orchestrator after the
+      last subagent finished — and pass; lints clean. No subagent ran a
+      suite (check scratchpads for suite commands)
 - [ ] Deferred findings are listed in the backlog with a one-line
       rationale
