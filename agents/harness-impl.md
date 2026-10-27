@@ -26,14 +26,9 @@ description: >-
     </example>
 
 mode: subagent
-# 2026-09-23: temporarily back on the Sonnet tier (sonnet-5; bumped to
-# sonnet-5-5 on 2026-10-08). On opus-5-5 every harness-impl
-# invocation in a wave (8/8 findings, incl. a docs-only one, solo and in a
-# burst) returned "blocked by the provider's content filter" before any
-# output, while harness-test/harness-research on the same pin and `coder`
-# on sonnet-5 ran the identical prompts clean. Revert to opus-5-5 once a
-# probe invocation succeeds again. Keep the model table in
-# skills/create-harness/SKILL.md in sync.
+# 2026-09-23: impl role kept on the Sonnet tier because opus hit provider
+# content-filter rejections before any output. Revert once a probe succeeds.
+# Rationale and pin history live in roles.yaml.
 model: anthropic/claude-sonnet-5-5
 permission:
   task: deny
@@ -62,7 +57,7 @@ The parent passes you:
 3. Plan: form a brief mental diff. If the planned diff touches files NOT listed in `Files in play`, **stop** and surface that as a blocker. Do not silently expand scope.
 4. Implement the `Required change` checklist in order.
 5. After each file edit, run the project's lint command via the Bash tool on the touched files. Fix lints you introduced.
-6. Run the verification commands listed in the prompt. If any fail, fix or roll back — do not ship a broken state.
+6. Run the verification commands listed in the prompt, limited to test files you created or edited and lint on touched files. Never run a package suite, test directory, DB/integration tier, build, bundle check, visual harness or container — you run in parallel with other agents and the orchestrator runs the full suites once at the end. If a prompt asks for a suite anyway, run only your files and say so.
 7. Stop. Do NOT write tests — the unit-test subagent owns that.
 
 ## Constraints

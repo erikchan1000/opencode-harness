@@ -13,12 +13,20 @@ set -euo pipefail
 #   opencode.jsonc  -> <repo>/opencode.jsonc
 #
 # `./install.sh --claude` installs into Claude Code instead: see
-# claude/install.sh.
+# claude/install.sh. `./install.sh --omp` installs into omp / oh-my-pi: see
+# omp/install.sh.
+#
+# A skill dir containing SKILL.omp.md (omp-only) is installed as a real
+# directory of per-entry symlinks without that file.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "${1:-}" = "--claude" ]; then
     exec "$SCRIPT_DIR/claude/install.sh"
+fi
+
+if [ "${1:-}" = "--omp" ]; then
+    exec "$SCRIPT_DIR/omp/install.sh"
 fi
 
 CONFIG_DIR="$HOME/.config/opencode"
@@ -31,30 +39,14 @@ TS="$(date +%Y%m%d-%H%M%S)"
 echo "Installing opencode config from $SCRIPT_DIR"
 echo ""
 
-# link SOURCE TARGET — create TARGET as a symlink to SOURCE.
-#   - existing symlink            -> replaced (idempotent)
-#   - existing real file/dir      -> backed up to TARGET.bak-<timestamp>
-link() {
-    local source="$1"
-    local target="$2"
-
-    if [ -L "$target" ]; then
-        rm "$target"
-    elif [ -e "$target" ]; then
-        echo "  Backing up existing $target -> $target.bak-$TS"
-        mv "$target" "$target.bak-$TS"
-    fi
-
-    ln -s "$source" "$target"
-    echo "  $target -> $source"
-}
+source "$SCRIPT_DIR/lib/link.sh"
 
 # --- Skills ---
 mkdir -p "$SKILLS_DIR"
 skill_count=0
 for skill_path in "$SCRIPT_DIR"/skills/*/; do
     name="$(basename "$skill_path")"
-    link "${skill_path%/}" "$SKILLS_DIR/$name"
+    link_skill "${skill_path%/}" "$SKILLS_DIR/$name"
     skill_count=$((skill_count + 1))
 done
 

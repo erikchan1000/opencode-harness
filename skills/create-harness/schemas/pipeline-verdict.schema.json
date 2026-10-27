@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencode-harness/schemas/pipeline-verdict.schema.json",
+  "title": "Harness pipeline verdict",
+  "description": "Final output of a harness-pipeline subagent for one finding (see agents/harness-pipeline.md, Output).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "finding_id", "status", "title", "files_changed", "tests",
+    "child_agent_ids", "warm_retries", "spillover", "blocker"
+  ],
+  "properties": {
+    "finding_id": { "type": "string", "pattern": "^[A-Z]+\\d+$" },
+    "status": { "enum": ["DONE", "BLOCKED"] },
+    "title": { "type": "string" },
+    "files_changed": { "type": "array", "items": { "type": "string" } },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["added", "passed", "total", "result"],
+      "properties": {
+        "added": { "type": "integer", "minimum": 0 },
+        "passed": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "result": { "enum": ["pass", "fail", "not_run"] }
+      }
+    },
+    "child_agent_ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "impl": { "type": "string" },
+        "test": { "type": "string" },
+        "debug": { "type": "string" }
+      }
+    },
+    "warm_retries": { "type": "integer", "minimum": 0 },
+    "spillover": { "type": ["string", "null"], "description": "One line of out-of-scope findings, or null. Never omitted." },
+    "blocker": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["gate", "reason", "next_step"],
+          "properties": {
+            "gate": { "enum": ["impl", "test"] },
+            "reason": { "type": "string" },
+            "next_step": { "enum": ["cold_retry", "defer", "human_input"] }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "BLOCKED" } }, "required": ["status"] },
+      "then": { "properties": { "blocker": { "type": "object" } } },
+      "else": { "properties": { "blocker": { "type": "null" } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "DONE" } }, "required": ["status"] },
+      "then": { "properties": { "tests": { "properties": { "result": { "const": "pass" } } } } }
+    }
+  ]
+}

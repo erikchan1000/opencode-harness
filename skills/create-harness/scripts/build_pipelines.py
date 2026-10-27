@@ -6,16 +6,18 @@ Replaces the LLM-based planner with a reliable, deterministic script.
 
 Usage:
     python build_pipelines.py --findings plan/findings.md --output plan/pipelines.md
+    python build_pipelines.py --findings-json a.json b.json --format json --output plan/pipelines.json
 
 Exit codes:
     0 — success
     1 — validation error (cycle, missing data, shared files in wave)
-    2 — parse error (findings.md format issue)
+    2 — parse error (findings.md / findings JSON format issue)
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import posixpath
 import re
 import sys
@@ -210,6 +212,115 @@ def parse_findings_table(text: str) -> list[Finding]:
 
     if not findings:
         print("ERROR: No findings parsed from the table.", file=sys.stderr)
+        sys.exit(2)
+
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# Parse findings JSON (schemas/findings.schema.json)
+# ---------------------------------------------------------------------------
+
+def _json_error(path: str, message: str) -> "NoReturn":
+    print(f"ERROR: {path}: {message}", file=sys.stderr)
+    sys.exit(2)
+
+
+def _require_type(path: str, where: str, value: object, expected: type, label: str):
+    # bool is an int subclass; none of the typed fields here are numeric.
+    if not isinstance(value, expected):
+        _json_error(path, f"{where} must be {label}, got {type(value).__name__}.")
+    return value
+
+
+def _finding_from_json(path: str, index: int, obj: object) -> Finding:
+    where = f"findings[{index}]"
+    _require_type(path, where, obj, dict, "an object")
+    try:
+        fid = _require_type(path, f"{where}.id", obj["id"], str, "a string")
+        severity = _require_type(path, f"{where}.severity", obj["severity"], str, "a string")
+        area = _require_type(path, f"{where}.area", obj["area"], str, "a string")
+        title = _require_type(path, f"{where}.title", obj["title"], str, "a string")
+        evidence = _require_type(path, f"{where}.evidence", obj["evidence"], list, "an array")
+        depends_on = _require_type(path, f"{where}.depends_on", obj["depends_on"], list, "an array")
+        touches = _require_type(path, f"{where}.touches_files", obj["touches_files"], list, "an array")
+        if not evidence:
+            _json_error(path, f"{where}.evidence must contain at least one file:line entry.")
+        first = _require_type(path, f"{where}.evidence[0]", evidence[0], dict, "an object")
+        ev_file = _require_type(path, f"{where}.evidence[0].file", first["file"], str, "a string")
+        ev_lines = _require_type(path, f"{where}.evidence[0].lines", first["lines"], str, "a string")
+    except KeyError as exc:
+        _json_error(path, f"{where} is missing required key {exc.args[0]!r}.")
+
+    if not re.match(r"^[A-Z]+\d+$", fid):
+        _json_error(path, f"{where}.id '{fid}' does not match ^[A-Z]+\\d+$.")
+    if severity.lower() not in SEVERITY_ORDER:
+        _json_error(
+            path,
+            f"{fid} has unknown severity '{severity}'. Expected one of: {', '.join(SEVERITY_ORDER)}.",
+        )
+
+    # status is optional in the schema; absent means the same as an empty
+    # table cell. A present status must be a known non-empty value.
+    status = ""
+    if "status" in obj:
+        status = _require_type(path, f"{where}.status", obj["status"], str, "a string")
+        if not status or status.lower() not in KNOWN_STATUSES:
+            _json_error(
+                path,
+                f"{fid} has unknown status '{status}'. "
+                f"Expected one of: {', '.join(sorted(s for s in KNOWN_STATUSES if s))}.",
+            )
+
+    for dep in depends_on:
+        _require_type(path, f"{where}.depends_on[]", dep, str, "a string")
+    for tf in touches:
+        _require_type(path, f"{where}.touches_files[]", tf, str, "a string")
+
+    return Finding(
+        id=fid,
+        severity=severity,
+        area=area,
+        title=title,
+        file_line=f"{ev_file}:{ev_lines}",
+        depends_on=list(depends_on),
+        touches_files=[normalize_path(t) for t in touches if t.strip()],
+        status=status,
+    )
+
+
+def load_findings_json(paths: list[str]) -> list[Finding]:
+    """Load and merge findings JSON files (argument order) into Finding objects.
+
+    Each file is an object matching schemas/findings.schema.json. Applies the
+    same validation as parse_findings_table; any problem exits with code 2.
+    """
+    findings: list[Finding] = []
+    seen_ids: set[str] = set()
+    for path in paths:
+        try:
+            raw = Path(path).read_text()
+        except OSError as exc:
+            _json_error(path, f"cannot read file ({exc.strerror}).")
+        try:
+            doc = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            _json_error(path, f"malformed JSON ({exc}).")
+        _require_type(path, "document", doc, dict, "an object")
+        try:
+            items = _require_type(path, "findings", doc["findings"], list, "an array")
+        except KeyError:
+            _json_error(path, "missing required key 'findings'.")
+        for index, obj in enumerate(items):
+            finding = _finding_from_json(path, index, obj)
+            if finding.id in seen_ids:
+                print(f"ERROR: Duplicate finding ID {finding.id} in findings JSON.", file=sys.stderr)
+                sys.exit(2)
+            seen_ids.add(finding.id)
+            findings.append(finding)
+
+    if not findings:
+        print("ERROR: No findings parsed from the JSON input.", file=sys.stderr)
         sys.exit(2)
 
     return findings
@@ -602,6 +713,57 @@ def render_pipelines(
     return "\n".join(lines)
 
 
+def render_waves_json(
+    findings: list[Finding],
+    waves: list[list[str]],
+    deferred: list[str],
+    done: list[str],
+    graph: dict[str, set[str]],
+    objective_title: str = "<objective>",
+) -> str:
+    """Render the wave plan as deterministic JSON (no timestamp).
+
+    `todo_init` is the exact argument for omp's `todo` tool: one phase per
+    wave, one item per finding. Item strings use an ASCII " - " separator
+    (not an em dash) so a model can retype them exactly; todo lookups are
+    exact string matches. `depends_on` in `waves` is the effective
+    graph (explicit deps plus file-conflict edges), sorted.
+    """
+    by_id = {f.id: f for f in findings}
+    doc = {
+        "title": objective_title,
+        "todo_init": {
+            "op": "init",
+            "list": [
+                {
+                    "phase": f"Wave {i}",
+                    "items": [f"{fid} - {by_id[fid].title}" for fid in wave],
+                }
+                for i, wave in enumerate(waves, 1)
+            ],
+        },
+        "waves": [
+            {
+                "wave": i,
+                "findings": [
+                    {
+                        "id": fid,
+                        "title": by_id[fid].title,
+                        "severity": by_id[fid].severity,
+                        "depends_on": sorted(graph[fid]),
+                        "touches_files": by_id[fid].touches_files,
+                    }
+                    for fid in wave
+                ],
+            }
+            for i, wave in enumerate(waves, 1)
+        ],
+        "deferred": deferred,
+        "done": done,
+    }
+    return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -610,15 +772,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build a dependency-aware wave plan from findings.md."
     )
-    parser.add_argument(
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         "--findings",
-        required=True,
         help="Path to findings.md",
+    )
+    source.add_argument(
+        "--findings-json",
+        nargs="+",
+        metavar="PATH",
+        help="One or more findings JSON files (schemas/findings.schema.json), merged in order",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Output format (default: markdown)",
     )
     parser.add_argument(
         "--output",
         required=True,
-        help="Path to write pipelines.md",
+        help="Path to write the plan (pipelines.md or JSON)",
     )
     parser.add_argument(
         "--title",
@@ -630,14 +804,18 @@ def main() -> None:
     if args.title == "<objective>":
         print("WARNING: --title not provided; pipelines.md header will contain the literal placeholder '<objective>'.", file=sys.stderr)
 
-    findings_path = Path(args.findings)
-    if not findings_path.exists():
-        print(f"ERROR: {findings_path} does not exist.", file=sys.stderr)
-        sys.exit(2)
+    if args.findings_json is not None:
+        findings = load_findings_json(args.findings_json)
+        print(f"Parsed {len(findings)} findings from {', '.join(args.findings_json)}")
+    else:
+        findings_path = Path(args.findings)
+        if not findings_path.exists():
+            print(f"ERROR: {findings_path} does not exist.", file=sys.stderr)
+            sys.exit(2)
 
-    text = findings_path.read_text()
-    findings = parse_findings_table(text)
-    print(f"Parsed {len(findings)} findings from {findings_path}")
+        text = findings_path.read_text()
+        findings = parse_findings_table(text)
+        print(f"Parsed {len(findings)} findings from {findings_path}")
 
     warn_basename_collisions(findings)
 
@@ -665,7 +843,12 @@ def main() -> None:
         sys.exit(1)
 
     # Render
-    output = render_pipelines(findings, waves, deferred, done, graph, objective_title=args.title)
+    if args.format == "json":
+        output = render_waves_json(findings, waves, deferred, done, graph, objective_title=args.title)
+    elif args.format == "markdown":
+        output = render_pipelines(findings, waves, deferred, done, graph, objective_title=args.title)
+    else:
+        raise RuntimeError(f"unexpected format: {args.format}")
 
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)

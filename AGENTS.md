@@ -84,31 +84,31 @@ If you can't answer yes confidently, the fallback is hiding a bug.
 # Strength-based model routing
 
 When running as the primary `build` agent, you are the orchestrator. Route
-each unit of work to the agent whose model tier fits it by delegating through
+each unit of work to the agent whose role fits it by delegating through
 the Task tool, rather than doing everything yourself. This is a deliberate
-tiered setup: `build` (you) is pinned to Opus 5.5, the strongest model in the
-roster, and each subagent is pinned to the tier that fits its job.
+tiered setup: `build` (you) runs the `default` role, the strongest in the
+roster, and each subagent runs the role that fits its job.
 
 ## Roster and when to delegate
 
-- **`coder`** (Sonnet 5.5) — delegate concrete implementation: writing,
+- **`coder`** (role `impl`) — delegate concrete implementation: writing,
   editing, or refactoring code from a clear spec. Hand it a precise plan and
   the files to touch.
-- **`deep-reasoner`** (Opus 5.5) — delegate the hardest analytical
+- **`deep-reasoner`** (role `reason`) — delegate the hardest analytical
   work: root-cause debugging of non-obvious bugs, algorithm design,
-  concurrency/race conditions, or comparing subtle tradeoffs. It runs the
-  same model as you, so what it adds is a dedicated, isolated context for a
-  rigorous reasoning pass — not a second, differently-trained opinion.
-- **`general`** (Sonnet 5.5) — delegate balanced multi-step tasks that don't
+  concurrency/race conditions, or comparing subtle tradeoffs. You run `default`
+  and it runs `reason`; `roles.yaml` currently maps both to the same model, so
+  what it adds is a dedicated, isolated context for a rigorous reasoning pass
+  — not a second, differently-trained opinion.
+- **`general`** (role `task`) — delegate balanced multi-step tasks that don't
   need top-tier reasoning or a code specialist.
-- **`explore`** (Haiku 4.5) — delegate codebase search, file finding, and
+- **`explore`** (role `smol`) — delegate codebase search, file finding, and
   "where/how does X work" questions. Fast and cheap; use it liberally before
   doing expensive reasoning.
 
-The `harness-*` roles carry their own pins; see the model table in the
-`create-harness` skill. Pins live in the global `opencode.jsonc`
-(`agent.<name>.model`) and in each agent file's `model:` frontmatter — when
-one changes, update this roster in the same change.
+The `harness-*` roles carry their own pins; see `roles.yaml`, the single
+source for them. Pins live in `roles.yaml` (role -> model, agent ->
+role); this prose names roles only, so a pin change needs no edit here.
 
 **MCP tools are scoped per agent** (the `permission` block in the global
 `opencode.jsonc`), because every tool schema is re-sent on every turn. Only
@@ -131,7 +131,7 @@ that agent's every turn: Linear ~26k tokens, Paper ~13k, Brave ~11k.
    (you are the strongest reasoning model), then hand the concrete plan to
    `coder`.
 3. **Escalate genuinely hard problems to `deep-reasoner`** for a dedicated
-   reasoning pass in a fresh context. It runs your model, so its value is
+   reasoning pass in a fresh context. While `roles.yaml` maps `reason` and `default` to the same model, its value is
    isolation, not diversity: a context not anchored on your working
    hypotheses, and a long investigation kept out of yours. For an
    independent check, hand it the evidence, not your conclusion.
@@ -140,3 +140,16 @@ that agent's every turn: Linear ~26k tokens, Paper ~13k, Brave ~11k.
    model or isolated context.
 5. **You own synthesis.** Subagents report back to you; you integrate their
    output, resolve conflicts, and remain accountable for the final result.
+6. **Subagents never run test suites; you run them once, at the end.**
+   Whenever you spawn more than one agent on a task (a harness wave, a batch
+   of findings, parallel fixes), put this in every prompt: run ONLY the test
+   files you created or edited — no package suites, test directories,
+   DB/integration tiers, builds, bundle checks, visual harness, or
+   containers. Between waves you run typecheck + lint once. After every
+   subagent and task has finished, you run the full suites ONCE, serially
+   (never two suites at once on one machine — they time out and the flakes
+   get chased as bugs), then push and let CI arbitrate; fix CI reds in one
+   batch. Never re-run a green suite to double-check, and never put a full
+   CI mirror in an integrator or fix-agent prompt. (2026-10-13: doing so in
+   every wave of an 11-wave run made verification take longer than the
+   build.)

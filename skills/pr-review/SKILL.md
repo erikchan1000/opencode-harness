@@ -31,10 +31,21 @@ security issues, bugs, performance problems, and style violations.
 
 ## Workflow
 
+`<skill-dir>` below is the absolute path of the directory containing this
+`SKILL.md` (it holds `scripts/` and `templates/`). Take it from the skill
+header given when the skill loaded: Claude Code, `[Skill directory: ...]`
+(or "Base directory for this skill"); omp, the `[Skill directory: ...]` line
+when the user invoked the skill, or, when it was autoloaded (as for
+`harness-review` via `autoloadSkills`), the `Skill: <path to SKILL.md>` line,
+whose parent directory is `<skill-dir>` (`skill://pr-review` works in both
+omp cases and is the skill directory in bash); opencode, the parent directory
+of the loaded `SKILL.md`. Substitute that absolute path wherever `<skill-dir>`
+appears in a command.
+
 ### Step 1: Ensure PR-Agent is installed
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/ensure_installed.py"
+python "<skill-dir>/scripts/ensure_installed.py"
 ```
 
 If PR-Agent is not installed, this creates an isolated venv at
@@ -48,21 +59,21 @@ can reach PyPI.
 
 **Review local branch diff (most common):**
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/run_review.py" \
+python "<skill-dir>/scripts/run_review.py" \
   --local \
   --command review
 ```
 
 **Review a specific PR by URL:**
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/run_review.py" \
+python "<skill-dir>/scripts/run_review.py" \
   --pr-url https://github.com/owner/repo/pull/123 \
   --command review
 ```
 
 **With domain-specific focus:**
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/run_review.py" \
+python "<skill-dir>/scripts/run_review.py" \
   --local \
   --command review \
   --extra-instructions "Focus on HIPAA compliance, PHI exposure, and audit logging"
@@ -75,8 +86,8 @@ python "${CLAUDE_SKILL_DIR}/scripts/run_review.py" \
 Pipe the output through the parser for structured formatting:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/run_review.py" --local --command review \
-  | python "${CLAUDE_SKILL_DIR}/scripts/parse_output.py" --format caveman
+python "<skill-dir>/scripts/run_review.py" --local --command review \
+  | python "<skill-dir>/scripts/parse_output.py" --format caveman
 ```
 
 **Output formats:**

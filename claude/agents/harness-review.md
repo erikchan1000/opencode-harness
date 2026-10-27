@@ -47,12 +47,9 @@ The parent passes you:
 ## Workflow
 
 1. Read the impl prompt to understand what was changed and why.
-2. Locate the pr-review scripts directory. Check these paths in order
-   and use the first that exists:
-   - `~/.claude/skills/pr-review/scripts/`
-   - `${CLAUDE_SKILL_DIR}/../pr-review/scripts/` (fallback)
-
-   Set `PR_REVIEW_SCRIPTS` to the resolved path for subsequent steps.
+2. The pr-review scripts directory is
+   `~/.claude/skills/pr-review/scripts/`. Set `PR_REVIEW_SCRIPTS`
+   to that path for subsequent steps.
 3. Run `ensure_installed.py` to verify PR-Agent is available:
    ```bash
    python "$PR_REVIEW_SCRIPTS/ensure_installed.py"

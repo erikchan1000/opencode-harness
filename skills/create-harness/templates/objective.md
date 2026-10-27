@@ -28,7 +28,7 @@
 
 ## Failure budget
 
-- Warm retries per finding (task_id resumption): **1** (default).
+- Warm retries per finding (resume the same agent; opencode: `task_id`, Claude Code: `SendMessage` to the agent id, omp: `write agent://<id>`): **1** (default).
 - Cold retries per finding (recovery agent): **1** (default).
 - Total retry budget per finding: **2** (warm + cold).
 - Max parallel research agents: **3** (default).

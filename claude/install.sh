@@ -24,19 +24,7 @@ CLAUDE_DIR="$HOME/.claude"
 OPENCODE_SKILLS="$HOME/.config/opencode/skills"
 TS="$(date +%Y%m%d-%H%M%S)"
 
-# link SOURCE TARGET — as in ../install.sh: replace a symlink, back up a real
-# file or directory to TARGET.bak-<timestamp>.
-link() {
-    local source="$1" target="$2"
-    if [ -L "$target" ]; then
-        rm "$target"
-    elif [ -e "$target" ]; then
-        echo "  Backing up existing $target -> $target.bak-$TS"
-        mv "$target" "$target.bak-$TS"
-    fi
-    ln -s "$source" "$target"
-    echo "  $target -> $source"
-}
+source "$REPO/lib/link.sh"
 
 echo "Installing Claude Code config from $REPO"
 python3 "$REPO/claude/build.py"
@@ -46,7 +34,7 @@ mkdir -p "$CLAUDE_DIR/skills" "$CLAUDE_DIR/agents"
 
 skill_count=0
 for skill_path in "$REPO"/skills/*/; do
-    link "${skill_path%/}" "$CLAUDE_DIR/skills/$(basename "$skill_path")"
+    link_skill "${skill_path%/}" "$CLAUDE_DIR/skills/$(basename "$skill_path")"
     skill_count=$((skill_count + 1))
 done
 
@@ -58,6 +46,9 @@ if [ -d "$OPENCODE_SKILLS" ]; then
         skill_path="${skill_path%/}"
         [ -L "$skill_path" ] && continue
         [ -f "$skill_path/SKILL.md" ] || continue
+        # Already installed from skills/ above (a farm dir there would be
+        # re-linked over itself).
+        [ -d "$REPO/skills/$(basename "$skill_path")" ] && continue
         link "$skill_path" "$CLAUDE_DIR/skills/$(basename "$skill_path")"
         extra_count=$((extra_count + 1))
     done

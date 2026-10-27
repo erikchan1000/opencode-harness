@@ -231,6 +231,41 @@ Claude Code differences from the opencode setup:
   Keychain key and the shared `ai-scribe` container that opencode-supermemory
   also writes to.
 
+### omp (oh-my-pi)
+
+```bash
+./install.sh --omp
+```
+
+Installs into omp's agent dir, `~/.omp/agent/` (override with
+`PI_CODING_AGENT_DIR=/some/dir ./install.sh --omp`). `omp/build.py` runs first
+and regenerates the files below from `roles.yaml`.
+
+| Source | Lands at |
+|--------|----------|
+| `omp/agents/*.md` | symlinks in `~/.omp/agent/agents/` |
+| `omp/RULES.md`, `omp/AGENTS.md` | symlinks in `~/.omp/agent/` |
+| `skills/<name>` | symlink `~/.omp/agent/skills/<name>` |
+| `skills/create-harness` | a **copy** (real dir): omp uses `SKILL.omp.md` as its `SKILL.md`. Re-run `./install.sh --omp` after editing it. |
+| `omp/config.fragment.yml` | merged into `~/.omp/agent/config.yml` (see below) |
+
+Claude Code and opencode never see `SKILL.omp.md`: for a skill that has one,
+their installers create a real directory of per-entry symlinks without it.
+
+`config.yml` is also written by omp itself (`/model`, `omp config set`), so it
+is merged, not linked. Only these keys are touched: `modelRoles` (each role in
+`roles.yaml` is set, your other roles are kept), `modelPresets` (the fragment's
+preset names are replaced whole, other presets kept), `task.maxRecursionDepth`,
+and `bash.patterns` (the fragment's deny patterns are placed first, because the
+first match wins; your other patterns follow in order). Every other key is left
+as is. The existing file is first copied to `config.yml.bak-<timestamp>`.
+PyYAML rewrites the file, so YAML comments in `config.yml` are lost; the backup
+keeps them. A `config.yml` that is not a YAML mapping aborts the install
+without writing.
+
+omp's `enabledProviders` must not include `claude` or `opencode`, or omp also
+loads those tools' skill and agent directories and sees every skill twice.
+
 ## Usage
 
 The harness activates automatically when you ask OpenCode to do something that matches the skill's trigger patterns:

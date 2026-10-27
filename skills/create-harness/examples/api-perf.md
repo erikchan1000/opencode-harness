@@ -40,7 +40,7 @@ endpoints and fix the highest-impact ones.
 ## Phase 1 — Research focuses
 
 The three research subagents run with **perf-shaped** focuses via the
-Task tool:
+subagent tool (`Task` in Claude Code/opencode, a batched `task` call in omp). The `Task(...)` blocks below use Claude Code / opencode syntax; for the omp form see [omp-mobile-bugs.md](omp-mobile-bugs.md):
 
 ```
 Task(subagent_type: "harness-research",

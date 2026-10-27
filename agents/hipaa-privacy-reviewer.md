@@ -10,7 +10,7 @@ description: >-
     assistant: "Here is the relevant implementation:"
     <function call omitted for brevity only for this example>
     <commentary>
-    Since the user has written a new PHI-handling implementation, use the Task tool to launch the hipaa-privacy-reviewer agent to review HIPAA/privacy/security controls and suggest compliant changes.
+    Since the user has written a new PHI-handling implementation, launch the hipaa-privacy-reviewer agent to review HIPAA/privacy/security controls and suggest compliant changes.
     </commentary>
     assistant: "Now I’m going to use the hipaa-privacy-reviewer agent to validate PHI handling and recommend compliance fixes."
   </example>
@@ -18,7 +18,7 @@ description: >-
   <example>
     Context: The user is about to add logging around a clinical workflow and wants to ensure no sensitive data is exposed.
     user: "I’m adding debug logs to the admission workflow"
-    assistant: "I’ll use the Task tool to launch the hipaa-privacy-reviewer agent before those logs are merged"
+    assistant: "I’ll launch the hipaa-privacy-reviewer agent before those logs are merged"
     <commentary>
     Since the user is proactively asking for a privacy/security check before deployment, use the hipaa-privacy-reviewer agent to assess logging, masking, access, and retention risks.
     </commentary>
@@ -27,7 +27,7 @@ description: >-
   <example>
     Context: The user shares a design for storing lab results and asks whether it is compliant.
     user: "Does this storage approach meet HIPAA requirements?"
-    assistant: "I’m going to use the Task tool to launch the hipaa-privacy-reviewer agent to evaluate the PHI storage pattern and suggest compliant alternatives."
+    assistant: "I’m going to launch the hipaa-privacy-reviewer agent to evaluate the PHI storage pattern and suggest compliant alternatives."
     <commentary>
     Since the user is asking for a HIPAA/privacy/security assessment, use the hipaa-privacy-reviewer agent to review the design and propose implementation changes.
     </commentary>

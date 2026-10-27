@@ -11,27 +11,27 @@ description: |-
     user: "Please add a function that turns raw transcript segments into a structured scribe note."
     assistant: "I'll implement the function now."
     <commentary>
-    Since a logical chunk of AI scribe code was just written, use the Agent tool to launch the scribe-test-engineer agent to create and run unit tests and integration validations with edge-case coverage.
+    Since a logical chunk of AI scribe code was just written, launch the scribe-test-engineer agent to create and run unit tests and integration validations with edge-case coverage.
     </commentary>
-    assistant: "I'm going to use the Agent tool to launch the scribe-test-engineer agent to build and run tests for this AI scribe functionality."
+    assistant: "I'm going to launch the scribe-test-engineer agent to build and run tests for this AI scribe functionality."
     </example>
   - <example>
     Context: A developer changed speaker diarization handling in the scribe pipeline and needs regression checks.
     user: "I updated how speaker labels are assigned across transcript chunks."
     assistant: "Got it."
     <commentary>
-    Since a core AI scribe behavior changed, use the Agent tool to launch the scribe-test-engineer agent to run targeted integration validations and verify edge cases such as missing speakers, overlapping turns, and out-of-order segments.
+    Since a core AI scribe behavior changed, launch the scribe-test-engineer agent to run targeted integration validations and verify edge cases such as missing speakers, overlapping turns, and out-of-order segments.
     </commentary>
-    assistant: "I'm going to use the Agent tool to launch the scribe-test-engineer agent to validate the update with targeted tests."
+    assistant: "I'm going to launch the scribe-test-engineer agent to validate the update with targeted tests."
     </example>
   - <example>
     Context: A developer is preparing a release for AI scribe features and wants proactive test coverage.
     user: "We’re about to ship the new scribe note pipeline."
     assistant: "Understood."
     <commentary>
-    Since release readiness is implied, use the Agent tool proactively to launch the scribe-test-engineer agent to create/confirm unit tests and integration validations, focusing on boundary cases, malformed inputs, and end-to-end behavior.
+    Since release readiness is implied, proactively launch the scribe-test-engineer agent to create/confirm unit tests and integration validations, focusing on boundary cases, malformed inputs, and end-to-end behavior.
     </commentary>
-    assistant: "I'm going to use the Agent tool to launch the scribe-test-engineer agent for release validation and edge-case test coverage."
+    assistant: "I'm going to launch the scribe-test-engineer agent for release validation and edge-case test coverage."
     </example>
 model: inherit
 disallowedTools: Agent, WebFetch, TodoWrite, mcp__brave-search, mcp__cbinsights, mcp__chrome-devtools, mcp__cloudflare, mcp__comfy-cloud, mcp__context7, mcp__figma, mcp__google-sheets, mcp__linear, mcp__mobbin, mcp__paper, mcp__playwright, mcp__stripe, mcp__supermemory-docs, mcp__telnyx

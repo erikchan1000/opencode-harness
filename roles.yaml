@@ -1,0 +1,48 @@
+# Single source for role -> model and agent -> role (omp target), and the single
+# home of the pin history (agents/*.md point here rather than restate it).
+# tests/test_roles.py asserts the existing opencode (opencode.jsonc, agents/*.md)
+# pins equal it. The omp build emits `model: "@<role>"` per agent, `modelRoles`
+# from `roles:`, and `modelPresets` from `roles:` (the `default` preset) plus
+# `presets:` (extras only).
+#
+# Pin history:
+#   2026-09-22  Opus pins moved to claude-opus-5-5.
+#   2026-10-08  Sonnet pins moved to claude-sonnet-5-5 (skills/create-harness/SKILL.md, Model assignments).
+#   2026-09-23  harness-impl is on sonnet-5-5 because opus-5-5 hit provider
+#               content-filter rejections before any output; revert when a probe
+#               succeeds.
+# The Claude Code form of a model is the id below with `anthropic/` stripped.
+
+roles:
+  default: anthropic/claude-opus-5-5
+  reason: anthropic/claude-opus-5-5
+  review: anthropic/claude-opus-5-5
+  research: anthropic/claude-opus-5-5
+  test: anthropic/claude-opus-5-5
+  impl: anthropic/claude-sonnet-5-5
+  structured: anthropic/claude-sonnet-5-5
+  task: anthropic/claude-sonnet-5-5
+  smol: anthropic/claude-haiku-4-5
+
+# The domain agents ehr-fhir-sync-architect, home-health-scribe-architect,
+# hipaa-privacy-reviewer and scribe-test-engineer have no pin and inherit the
+# caller's model, so they are deliberately not listed.
+agents:
+  coder: impl
+  deep-reasoner: reason
+  harness-research: research
+  harness-prompt: structured
+  harness-pipeline: structured
+  harness-impl: impl
+  harness-test: test
+  harness-debug: reason
+  harness-review: review
+  harness-recovery: reason
+  # opencode built-ins
+  build: default
+  general: task
+  explore: smol
+
+# Extra presets beyond `default` (which the build derives from `roles:`), as
+# `<name>: {<role>: <provider/model>}`. None today.
+presets:
