@@ -59,3 +59,14 @@ def test_mcp_scoping_follows_opencode_allowlists():
     # harness-recovery has no opencode entry, so it gets no scoped server.
     recovery = _disallowed("harness-recovery")
     assert {"mcp__codegraph", "mcp__linear", "mcp__paper", "mcp__dart"} <= recovery
+
+
+def test_harness_review_uses_single_pr_review_scripts_path():
+    # F17: step 2 used to probe two locations via an undefined CLAUDE_SKILL_DIR.
+    source = (REPO / "agents" / "harness-review.md").read_text()
+    generated = (REPO / "claude" / "agents" / "harness-review.md").read_text()
+    assert "CLAUDE_SKILL_DIR" not in source
+    assert "CLAUDE_SKILL_DIR" not in generated
+    assert "~/.config/opencode/skills/pr-review/scripts/" in source
+    assert "~/.claude/skills/pr-review/scripts/" in generated
+    assert "~/.config/opencode/skills/pr-review/scripts/" not in generated

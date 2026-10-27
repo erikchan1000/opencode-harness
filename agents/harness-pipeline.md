@@ -30,7 +30,7 @@ description: >-
 
 mode: subagent
 permission:
-  # Scoped fan-out: this runner may spawn ONLY the four leaf roles it
+  # Scoped fan-out: this runner may spawn ONLY the three leaf roles it
   # coordinates. Wildcard first — last matching rule wins, so the
   # specific allows below override the blanket deny.
   # Declaring any `task` rule also suppresses opencode's injected

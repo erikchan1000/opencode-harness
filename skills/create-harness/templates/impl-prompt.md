@@ -129,7 +129,7 @@ If the impl agent can't complete this in one pass, it should:
 1. Save its progress to a `HARNESS-WIP` comment in the file it was editing.
 2. Return a one-paragraph summary of what it did, what's left, and
    what blocked it.
-3. The orchestrator will attempt a warm retry (resume via task_id)
+3. The orchestrator will attempt a warm retry (resume the same agent; opencode: `task_id`, Claude Code: `SendMessage` to the agent id, omp: `write agent://<id>`)
    first, then route to the recovery agent if warm retry fails.
 ```
 

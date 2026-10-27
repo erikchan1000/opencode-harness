@@ -192,6 +192,9 @@ def main() -> int:
     parser.add_argument("--repo", required=True, help="GitHub repo in owner/repo format")
     parser.add_argument("--skill-name", default="", help="Skill name to install (required if repo has many)")
     parser.add_argument("--ref", default="", help="Branch, tag, or commit SHA (defaults to repo default branch)")
+    # The opencode dir is the deliberate default: it is the staging area that
+    # `install.sh --claude` fans out from. omp users pass --target-dir, since
+    # omp's installer does not sweep this directory.
     parser.add_argument(
         "--target-dir",
         default=os.path.expanduser("~/.config/opencode/skills"),

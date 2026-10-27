@@ -47,33 +47,33 @@ ninth without a strong reason — diluting roles is how harnesses go bad.
 
 | Role | `subagent_type` | Tool restrictions | Output |
 |------|-----------------|-------------------|--------|
-| **Research** | `harness-research` | `edit: false` | Structured findings file with file:line refs |
+| **Research** | `harness-research` | read-only (no edit) | Structured findings file with file:line refs |
 | **Prompt author** | `harness-prompt` | — | One tailored implementation-prompt `.md` per finding |
 | **Pipeline runner** | `harness-pipeline` | scoped `task` (see below) | One compact per-finding verdict |
 | **Implementation** | `harness-impl` | — | A diff that compiles + one-line completion log |
-| **Debug** | `harness-debug` | `edit: false` | Root-cause note + recommended patch (no edits) |
-| **Review** | `harness-review` | `edit: false` | PR-Agent findings + PASS/NEEDS_FIX/BLOCKED verdict |
+| **Debug** | `harness-debug` | read-only (no edit) | Root-cause note + recommended patch (no edits) |
+| **Review** | `harness-review` | read-only (no edit) | PR-Agent findings + PASS/NEEDS_FIX/BLOCKED verdict |
 | **Unit test** | `harness-test` | — | New / amended tests + green test-run log |
-| **Recovery** | `harness-recovery` | `edit: false` | A revised prompt for whichever role failed |
+| **Recovery** | `harness-recovery` | read-only (no edit) | A revised prompt for whichever role failed |
 
-Every harness agent has `todowrite: false` (parent owns the task list).
-All of them also have `task: false` **except `harness-pipeline`**, which is
-the single role permitted to fan out — and only to the four leaf roles it
-coordinates:
+Every harness agent is denied the todo-list tool (parent owns the task list).
+All of them are also denied spawning **except `harness-pipeline`**, which is
+the single role permitted to fan out — and only to the three leaf roles it
+coordinates (`harness-review` is spawned by the orchestrator, never by a
+runner):
 
 ```yaml
 permission:
   task:
     "*": deny            # wildcard first — last matching rule wins
     harness-impl: allow
-    harness-review: allow
     harness-test: allow
     harness-debug: allow
 ```
 
 This requires `"subagent_depth": 2` in `opencode.json(c)`; the default of
 `1` blocks all nesting. Depth accounting is orchestrator=0, runner=1,
-leaf=2. Because the leaf roles keep `task: false`, depth 2 is
+leaf=2. Because the leaf roles are denied spawning, depth 2 is
 self-limiting — nothing can reach a third level even by mistake.
 
 Two mechanisms must both be satisfied for nesting to work, and they are
@@ -102,17 +102,19 @@ rule is therefore enforced in the runner's prompt instead.
 
 ### Model assignments
 
-The roles run on a deliberate two-tier model split, set via `model:`
-(and `variant:`) in each agent's frontmatter:
+Each agent names a **role**, never a model. `roles.yaml` at the repo root is
+the single source for role -> model and agent -> role; this section does not
+repeat the pins, so a pin change needs no edit here. The roles run on a
+deliberate two-tier split:
 
-| Role(s) | Model | Rationale |
-|---------|-------|-----------|
-| Test (`harness-test`) | `anthropic/claude-opus-5-5` | Code-writing role: strongest implementation model |
-| Implementation (`harness-impl`) | `anthropic/claude-sonnet-5-5` | 2026-09-23: temporarily back from opus-5-5 — every impl invocation on that pin was rejected by the provider content filter pre-output (8/8 findings, docs-only included) while test/research on the same pin ran clean. Revert when a probe succeeds; see the comment in `agents/harness-impl.md`. |
-| Review (`harness-review`), Debug (`harness-debug`), Recovery (`harness-recovery`) | `anthropic/claude-opus-5-5` | Judgment roles: security/correctness review, root-cause analysis, and diagnosing *why an agent failed* — the three hardest reasoning jobs in the loop |
-| Research (`harness-research`) | `anthropic/claude-opus-5-5` | Findings quality gates every downstream phase (2026-08-22: upgraded from sonnet-4-6 per user preference) |
-| Prompt (`harness-prompt`), Pipeline (`harness-pipeline`) | `anthropic/claude-sonnet-5-5` | Structured-output roles: templating a finding into a prompt, and sequencing gates from explicit PASS/NEEDS_FIX verdicts. Neither needs frontier reasoning; both are high-volume, so this is where the cost lives |
-| Orchestration (parent agent) | Run the parent session on `anthropic/claude-opus-5-5` | The orchestrator makes the retry/defer/escalate decisions; use the strongest model |
+| Role(s) | Role | Rationale |
+|---------|------|-----------|
+| Test (`harness-test`) | `test` | Code-writing role: strongest implementation model |
+| Implementation (`harness-impl`) | `impl` | 2026-09-23: temporarily back from the strongest model, because every impl invocation on that pin was rejected by the provider content filter pre-output (8/8 findings, docs-only included) while test/research on the same pin ran clean. Revert when a probe succeeds; see the pin history in `roles.yaml`. |
+| Review (`harness-review`), Debug (`harness-debug`), Recovery (`harness-recovery`) | `review`, `reason` | Judgment roles: security/correctness review, root-cause analysis, and diagnosing *why an agent failed* — the three hardest reasoning jobs in the loop |
+| Research (`harness-research`) | `research` | Findings quality gates every downstream phase (2026-08-22: upgraded from the mid tier per user preference) |
+| Prompt (`harness-prompt`), Pipeline (`harness-pipeline`) | `structured` | Structured-output roles: templating a finding into a prompt, and sequencing gates from explicit PASS/NEEDS_FIX verdicts. Neither needs frontier reasoning; both are high-volume, so this is where the cost lives |
+| Orchestration (parent agent) | `default` | The orchestrator makes the retry/defer/escalate decisions; use the strongest model |
 
 Research is the one to resist downgrading. It is tempting to put it on Haiku
 alongside the built-in `explore` agent, but research does more than search —
@@ -127,14 +129,15 @@ harness run, each reading a lot of code. It is the most expensive Opus slot in
 the roster. If cost becomes the binding constraint, this is the first place to
 look, but downgrade it deliberately rather than by drift.
 
-When updating model assignments, edit the frontmatter of the
-corresponding `~/.config/opencode/agents/harness-*.md` files and keep
-this table in sync. Two pins live outside the harness agents and move with
-the Opus rows: the orchestration row mirrors the `build` pin in the global
-`opencode.jsonc`, and PR-Agent (which `harness-review` drives) reviews
-with the pr-review skill's `DEFAULT_MODEL` in `scripts/run_review.py`.
-2026-09-22: every Opus pin moved from `claude-opus-5` to `claude-opus-5-5`.
-2026-10-08: every Sonnet pin moved from `claude-sonnet-5` to `claude-sonnet-5-5`.
+When updating model assignments, edit `roles.yaml` (and the opencode
+pins that `tests/test_roles.py` asserts equal it); this section names roles
+only. Two pins live outside the harness agents and move with the `default`
+and `review` roles: the orchestration row mirrors the `build` pin in the
+global `opencode.jsonc`, and PR-Agent (which `harness-review` drives)
+reviews with the pr-review skill's `DEFAULT_MODEL` in
+`scripts/run_review.py`. Dated pin moves (2026-09-22 Opus generation bump,
+2026-10-08 Sonnet generation bump) are recorded in the `roles.yaml` pin
+history.
 
 The **recovery** role is the one most teams skip. It is what turns "the
 implementation agent timed out" from a dead end into "feed the truncated
@@ -184,7 +187,7 @@ removes the backstop described above. `1` blocks the runners from spawning.
 
 Model pins: `~/.claude/agents/*.md` are generated from
 `~/opencode-harness/agents/*.md` by `claude/build.py`, so change a pin in
-the opencode agent file (and the table below), then re-run
+the opencode agent file (and `roles.yaml`), then re-run
 `./install.sh --claude`.
 
 ## Methodology — five-phase loop

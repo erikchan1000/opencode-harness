@@ -26,14 +26,9 @@ description: >-
     </example>
 
 mode: subagent
-# 2026-09-23: temporarily back on the Sonnet tier (sonnet-5; bumped to
-# sonnet-5-5 on 2026-10-08). On opus-5-5 every harness-impl
-# invocation in a wave (8/8 findings, incl. a docs-only one, solo and in a
-# burst) returned "blocked by the provider's content filter" before any
-# output, while harness-test/harness-research on the same pin and `coder`
-# on sonnet-5 ran the identical prompts clean. Revert to opus-5-5 once a
-# probe invocation succeeds again. Keep the model table in
-# skills/create-harness/SKILL.md in sync.
+# 2026-09-23: impl role kept on the Sonnet tier because opus hit provider
+# content-filter rejections before any output. Revert once a probe succeeds.
+# Rationale and pin history live in roles.yaml.
 model: anthropic/claude-sonnet-5-5
 permission:
   task: deny

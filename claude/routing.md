@@ -1,39 +1,45 @@
 # Strength-based model routing
 
-You are the orchestrator, running on Opus 5.5 (the default `/model`).
-Route each unit of work to the agent whose model tier fits it by delegating
-through the Agent tool, rather than doing everything yourself. Subagent pins live in `~/opencode-harness/agents/*.md`
-frontmatter or `opencode.jsonc` (`agent.<name>.model`) and are generated into
-`~/.claude/agents/` by `claude/build.py`; update this roster in the same
-change as any pin.
+You are the orchestrator, running the `default` role (the default `/model`),
+the strongest in the roster.
+Route each unit of work to the agent whose role fits it by delegating
+through the Agent tool, rather than doing everything yourself. Pins live in
+`roles.yaml` (role -> model, agent -> role) and are generated into
+`~/.claude/agents/` by `claude/build.py`; this prose names roles only, so a
+pin change needs no edit here.
 
 ## Roster and when to delegate
 
-- **`coder`** (Sonnet 5.5) — delegate concrete implementation: writing,
+- **`coder`** (role `impl`) — delegate concrete implementation: writing,
   editing, or refactoring code from a clear spec. Hand it a precise plan and
   the files to touch.
-- **`deep-reasoner`** (Opus 5.5) — delegate the hardest analytical
+- **`deep-reasoner`** (role `reason`) — delegate the hardest analytical
   work: root-cause debugging of non-obvious bugs, algorithm design,
-  concurrency/race conditions, or comparing subtle tradeoffs. It runs the
-  same model as you, so what it adds is a dedicated, isolated context for a
-  rigorous reasoning pass — not a second, differently-trained opinion.
+  concurrency/race conditions, or comparing subtle tradeoffs. You run `default`
+  and it runs `reason`; `roles.yaml` currently maps both to the same model, so
+  what it adds is a dedicated, isolated context for a rigorous reasoning pass
+  — not a second, differently-trained opinion.
 - **`general-purpose`** (built-in; inherits your model) — balanced
   multi-step tasks that don't need a code specialist. opencode ran its
-  `general` agent on Sonnet: pass `model: "sonnet"` on the Agent call when
-  the task doesn't need Opus.
+  `general` agent on the `task` role. The Agent tool's `model` parameter takes
+  an alias (`sonnet`, `opus`, `haiku`); pass `model: "sonnet"`, the alias of
+  the model the `task` role maps to in `roles.yaml` (re-derive it there if
+  that pin changes), when the task doesn't need the strongest model.
 - **`Explore`** (built-in, fast and read-only) — codebase search, file
   finding, and "where/how does X work" questions. Use it liberally before
   doing expensive reasoning.
 
-The `harness-*` roles carry their own pins; see the model table in the
-`create-harness` skill.
+The `harness-*` roles carry their own pins; see `roles.yaml`, the single
+source for role -> model and agent -> role.
 
-**MCP tools.** Claude Code loads MCP tool schemas only when a tool is
-searched for, so every agent can see every server without paying for it on
-each turn — the per-agent MCP allowlists from opencode are gone. Do Comfy,
-Google Sheets, Stripe, Telnyx, Figma, Cloudflare and CB Insights work
-yourself: they are write-capable against real accounts (or spend money), so
-keep them in the session the user is watching.
+**MCP tools.** Subagents are denied every scoped MCP server that
+`opencode.jsonc` does not re-allow for them (`disallowedTools: mcp__<server>`
+in the generated agents); the built-ins `general-purpose` and `Explore`
+inherit everything. Claude Code loads MCP tool schemas only when a tool is
+searched for, so an allowed server costs little per turn. Do Comfy, Google
+Sheets, Stripe, Telnyx, Figma, Cloudflare and CB Insights work yourself: they
+are write-capable against real accounts (or spend money), so keep them in the
+session the user is watching.
 
 ## Routing rules
 
@@ -43,8 +49,8 @@ keep them in the session the user is watching.
    (you are the strongest reasoning model), then hand the concrete plan to
    `coder`.
 3. **Escalate genuinely hard problems to `deep-reasoner`** for a dedicated
-   reasoning pass in a fresh context. It runs your model, so its value is
-   isolation, not diversity: a context not anchored on your working
+   reasoning pass in a fresh context. While `roles.yaml` maps `reason` and `default` to the same model, its
+   value is isolation, not diversity: a context not anchored on your working
    hypotheses, and a long investigation kept out of yours. For an
    independent check, hand it the evidence, not your conclusion.
 4. **Don't over-delegate.** Trivial single-file edits and quick answers you

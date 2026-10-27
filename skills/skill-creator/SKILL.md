@@ -135,32 +135,23 @@ At this point, it is time to actually create the skill.
 
 Skip this step only if the skill being developed already exists, and iteration or packaging is needed. In this case, continue to the next step.
 
-When creating a new skill from scratch, always run the `init_skill.py` script. The script conveniently generates a new template skill directory that automatically includes everything a skill requires, making the skill creation process much more efficient and reliable.
+When creating a new skill from scratch, create the directory and `SKILL.md` by hand:
 
-Usage:
+1. Run `mkdir -p ~/opencode-harness/skills/<skill-name>`. The skill name is lowercase-hyphen.
+2. Create `~/opencode-harness/skills/<skill-name>/SKILL.md` starting with YAML frontmatter containing the required fields: `name` (identical to the directory name) and `description` (what the skill does and when to use it).
+3. Create `scripts/`, `references/`, and `assets/` subdirectories only for the contents planned in Step 2.
 
-```bash
-scripts/init_skill.py <skill-name> --path <output-directory>
-```
-
-The script:
-
-- Creates the skill directory at the specified path
-- Generates a SKILL.md template with proper frontmatter and TODO placeholders
-- Creates example resource directories: `scripts/`, `references/`, and `assets/`
-- Adds example files in each directory that can be customized or deleted
-
-After initialization, customize or remove the generated SKILL.md and example files as needed.
+**Where skills live:** Always create and edit skills under `~/opencode-harness/skills/<skill-name>/`, the single source of truth. Then run `./install.sh` (opencode) and `./install.sh --claude` (Claude Code) from `~/opencode-harness` to link them. `./install.sh --omp` installs skills into `~/.omp/agent/skills` (symlinks, or a copy for skills with a `SKILL.omp.md`). Never write directly into `~/.claude/skills`, `~/.omp/agent/skills`, or `~/.config/opencode/skills`.
 
 ### Step 4: Edit the Skill
 
-When editing the (newly-generated or existing) skill, remember that the skill is being created for another instance of Claude to use. Focus on including information that would be beneficial and non-obvious to Claude. Consider what procedural knowledge, domain-specific details, or reusable assets would help another Claude instance execute these tasks more effectively.
+When editing the (new or existing) skill, remember that the skill is being created for another instance of Claude to use. Focus on including information that would be beneficial and non-obvious to Claude. Consider what procedural knowledge, domain-specific details, or reusable assets would help another Claude instance execute these tasks more effectively.
 
 #### Start with Reusable Skill Contents
 
 To begin implementation, start with the reusable resources identified above: `scripts/`, `references/`, and `assets/` files. Note that this step may require user input. For example, when implementing a `brand-guidelines` skill, the user may need to provide brand assets or templates to store in `assets/`, or documentation to store in `references/`.
 
-Also, delete any example files and directories not needed for the skill. The initialization script creates example files in `scripts/`, `references/`, and `assets/` to demonstrate structure, but most skills won't need all of them.
+Also, delete any example files and directories not needed for the skill. Most skills do not need all of `scripts/`, `references/`, and `assets/`; remove the ones left empty.
 
 #### Update SKILL.md
 
@@ -172,32 +163,16 @@ To complete SKILL.md, answer the following questions:
 2. When should the skill be used?
 3. In practice, how should Claude use the skill? All reusable skill contents developed above should be referenced so that Claude knows how to use them.
 
-### Step 5: Packaging a Skill
+### Step 5: Validating and Installing a Skill
 
-Once the skill is ready, it should be packaged into a distributable zip file that gets shared with the user. The packaging process automatically validates the skill first to ensure it meets all requirements:
+Once the skill is ready, validate it manually:
 
-```bash
-scripts/package_skill.py <path/to/skill-folder>
-```
+1. Confirm the SKILL.md frontmatter has both `name` and `description`.
+2. Confirm `name` equals the skill directory name.
+3. Confirm the SKILL.md body is written in imperative form.
+4. Confirm every `scripts/`, `references/`, and `assets/` path mentioned in SKILL.md exists.
 
-Optional output directory specification:
-
-```bash
-scripts/package_skill.py <path/to/skill-folder> ./dist
-```
-
-The packaging script will:
-
-1. **Validate** the skill automatically, checking:
-
-   - YAML frontmatter format and required fields
-   - Skill naming conventions and directory structure
-   - Description completeness and quality
-   - File organization and resource references
-
-2. **Package** the skill if validation passes, creating a zip file named after the skill (e.g., `my-skill.zip`) that includes all files and maintains the proper directory structure for distribution.
-
-If validation fails, the script will report the errors and exit without creating a package. Fix any validation errors and run the packaging command again.
+Then run `./install.sh`, `./install.sh --claude` and `./install.sh --omp` from `~/opencode-harness` to link the skill into opencode, Claude Code and omp.
 
 ### Step 6: Iterate
 

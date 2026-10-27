@@ -6,20 +6,28 @@ license: MIT
 
 # SkillsMP Discovery
 
-Use this skill to discover and install community skills from SkillsMP into OpenCode.
+Use this skill to discover and install community skills from SkillsMP into the agent harness in use (opencode, Claude Code or omp).
 
 ## When to use
 
 - The user asks for a capability that might already exist as a public skill.
 - The user asks to search SkillsMP by topic or use case.
-- The user asks to install a community skill into OpenCode.
+- The user asks to install a community skill into the harness in use.
 
 ## Search workflow
+
+`<skill-dir>` below is the absolute path of the directory containing this
+`SKILL.md` (it holds `scripts/`). Take it from the skill header given when
+the skill loaded: Claude Code, "Base directory for this skill"; omp, the
+`[Skill directory: ...]` line (or `skill://skillsmp-discovery`, which is the
+skill directory in bash); opencode, the parent directory of the loaded
+`SKILL.md`. Substitute that absolute path wherever `<skill-dir>` appears in
+a command.
 
 1. Search SkillsMP with:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/skillsmp_search.py" --query "$ARGUMENTS"
+python "<skill-dir>/scripts/skillsmp_search.py" --query "$ARGUMENTS"
 ```
 
 2. If `SKILL_MAP_API_KEY` is set, the script uses SkillsMP API endpoints.
@@ -31,7 +39,7 @@ python "${CLAUDE_SKILL_DIR}/scripts/skillsmp_search.py" --query "$ARGUMENTS"
 After the user chooses a result, install it with:
 
 ```bash
-python "${CLAUDE_SKILL_DIR}/scripts/skillsmp_install.py" --repo "owner/repo" --skill-name "skill-name"
+python "<skill-dir>/scripts/skillsmp_install.py" --repo "owner/repo" --skill-name "skill-name"
 ```
 
 Useful flags:
@@ -42,20 +50,15 @@ Useful flags:
 
 ## Verify installation
 
-Run:
-
-```bash
-opencode debug skill
-```
-
-Confirm the installed skill appears in the discovered list.
+- opencode: run `opencode debug skill` and confirm the skill appears in the discovered list.
+- Claude Code: confirm `~/.claude/skills/<name>/SKILL.md` exists after `install.sh --claude`.
+- omp: run `ls "${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}/skills/<name>/SKILL.md"`.
 
 ## Notes
 
-- Skills are installed globally to `~/.config/opencode/skills` by default.
-  Under Claude Code, run `~/opencode-harness/install.sh --claude` afterwards:
-  it links every skill installed there into `~/.claude/skills`, so both
-  tools see it. (Or pass `--target-dir ~/.claude/skills` for a Claude-only
-  install.)
+- Install location depends on the harness:
+  - opencode: the default `--target-dir` (`~/.config/opencode/skills`).
+  - Claude Code: the same default dir, then run `~/opencode-harness/install.sh --claude`; it links the skill into `~/.claude/skills`.
+  - omp: pass `--target-dir "${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}/skills"` to install natively. `install.sh --omp` does not pick up skills from the opencode dir.
 - Review third-party skill content before relying on it.
 - If multiple skills are found in a repository, provide `--skill-name` to disambiguate.

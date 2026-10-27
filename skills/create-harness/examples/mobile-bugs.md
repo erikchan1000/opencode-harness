@@ -41,7 +41,9 @@ Find and fix correctness / UX bugs in the mobile recording pipeline
 ## Phase 1 — Research
 
 Spawn three research subagents in parallel using the Task tool, each
-scoped to a slice:
+scoped to a slice. The `Task(...)` blocks in this file use Claude Code /
+opencode syntax; for the omp form (a batched `task` call) see
+[omp-mobile-bugs.md](omp-mobile-bugs.md).
 
 ```
 Task(subagent_type: "harness-research",
@@ -175,7 +177,7 @@ If F01 had failed:
 
 1. `harness-impl(F01)` returns `BLOCKED: ModelDownloadService isn't
    injectable`.
-2. **Warm retry**: resume the same agent via task_id with guidance:
+2. **Warm retry**: resume the same agent (opencode: `task_id`; Claude Code: `SendMessage` to the agent id; omp: `write agent://<id>`) with guidance:
    "Your scratchpad shows you identified the issue at line 295 but
    couldn't mock the service. Try adding a constructor parameter for
    the service so it can be faked, THEN do the wiring."
