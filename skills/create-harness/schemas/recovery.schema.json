@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencode-harness/schemas/recovery.schema.json",
+  "title": "Harness recovery report",
+  "description": "Output of the harness-recovery agent (see agents/harness-recovery.md, Output). failure_mode enumerates the six diagnoses in order.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["finding_id", "attempt", "diagnosis", "revised_prompt_path", "changes", "budget_remaining"],
+  "properties": {
+    "finding_id": { "type": "string", "pattern": "^[A-Z]+\\d+$" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "diagnosis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_mode", "summary"],
+      "properties": {
+        "failure_mode": {
+          "enum": [
+            "timeout_token_limit",
+            "empty_truncated_output",
+            "wrong_file_edited",
+            "lint_compile_error",
+            "test_impl_disagreement",
+            "genuinely_blocked"
+          ]
+        },
+        "summary": { "type": "string" }
+      }
+    },
+    "revised_prompt_path": { "type": ["string", "null"] },
+    "changes": { "type": "array", "items": { "type": "string" } },
+    "budget_remaining": { "type": "integer", "minimum": 0 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "diagnosis": {
+            "properties": { "failure_mode": { "const": "genuinely_blocked" } },
+            "required": ["failure_mode"]
+          }
+        },
+        "required": ["diagnosis"]
+      },
+      "then": { "properties": { "revised_prompt_path": { "type": "null" } } },
+      "else": { "properties": { "revised_prompt_path": { "type": "string", "minLength": 1 } } }
+    }
+  ]
+}

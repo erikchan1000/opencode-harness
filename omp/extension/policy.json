@@ -1,0 +1,107 @@
+{
+  "mcp": {
+    "servers": [
+      "brave-search",
+      "cbinsights",
+      "chrome-devtools",
+      "cloudflare",
+      "codegraph",
+      "comfy-cloud",
+      "context7",
+      "dart",
+      "figma",
+      "google-sheets",
+      "linear",
+      "mobbin",
+      "paper",
+      "playwright",
+      "stripe",
+      "supermemory-docs",
+      "telnyx"
+    ],
+    "agents": {
+      "coder": [
+        "chrome-devtools",
+        "codegraph",
+        "context7",
+        "dart",
+        "paper"
+      ],
+      "deep-reasoner": [
+        "brave-search",
+        "codegraph",
+        "dart",
+        "linear",
+        "paper"
+      ],
+      "ehr-fhir-sync-architect": [
+        "brave-search",
+        "codegraph",
+        "context7"
+      ],
+      "harness-debug": [
+        "brave-search",
+        "chrome-devtools",
+        "codegraph",
+        "dart",
+        "playwright"
+      ],
+      "harness-impl": [
+        "codegraph",
+        "context7",
+        "dart",
+        "paper",
+        "playwright"
+      ],
+      "harness-pipeline": [
+        "paper"
+      ],
+      "harness-prompt": [
+        "brave-search",
+        "codegraph",
+        "context7",
+        "linear",
+        "paper"
+      ],
+      "harness-recovery": [],
+      "harness-research": [
+        "brave-search",
+        "codegraph",
+        "linear",
+        "mobbin",
+        "paper"
+      ],
+      "harness-review": [
+        "dart",
+        "playwright"
+      ],
+      "harness-test": [
+        "codegraph",
+        "dart"
+      ],
+      "hipaa-privacy-reviewer": [
+        "codegraph"
+      ],
+      "home-health-scribe-architect": [
+        "brave-search",
+        "codegraph",
+        "context7"
+      ],
+      "scribe-test-engineer": [
+        "codegraph",
+        "dart"
+      ]
+    }
+  },
+  "spawn": {
+    "harness-debug": [
+      "harness-pipeline"
+    ],
+    "harness-impl": [
+      "harness-pipeline"
+    ],
+    "harness-test": [
+      "harness-pipeline"
+    ]
+  }
+}

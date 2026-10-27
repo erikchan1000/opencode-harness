@@ -1,0 +1,75 @@
+{
+  "$schema": "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json",
+  "mcpServers": {
+    "cloudflare": {
+      "type": "http",
+      "url": "https://mcp.cloudflare.com/mcp"
+    },
+    "mobbin": {
+      "type": "http",
+      "url": "https://api.mobbin.com/mcp"
+    },
+    "figma": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-developer-mcp",
+        "--stdio"
+      ],
+      "env": {
+        "FIGMA_API_KEY": "${FIGMA_API_KEY}"
+      }
+    },
+    "context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    },
+    "supermemory-docs": {
+      "type": "http",
+      "url": "https://supermemory.ai/docs/mcp",
+      "enabled": true
+    },
+    "linear": {
+      "type": "http",
+      "url": "https://mcp.linear.app/mcp"
+    },
+    "google-sheets": {
+      "type": "http",
+      "url": "https://sheetsmcp.googleapis.com/mcp/v1",
+      "oauth": {
+        "clientId": "${GOOGLE_SHEETS_MCP_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_SHEETS_MCP_CLIENT_SECRET}",
+        "scope": "https://www.googleapis.com/auth/spreadsheets",
+        "redirectUri": "http://127.0.0.1:19876/mcp/oauth/callback"
+      }
+    },
+    "paper": {
+      "type": "http",
+      "url": "http://127.0.0.1:29979/mcp"
+    },
+    "brave-search": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@brave/brave-search-mcp-server"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "!cat /Users/erikchan/.config/opencode/brave-api-key"
+      }
+    },
+    "comfy-cloud": {
+      "type": "http",
+      "url": "https://cloud.comfy.org/mcp"
+    },
+    "cbinsights": {
+      "type": "http",
+      "url": "https://mcp.cbinsights.com"
+    }
+  }
+}
